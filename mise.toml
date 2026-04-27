@@ -6,6 +6,9 @@ typos = "latest"
 gitleaks = "latest"
 rumdl = "latest"
 
+[tasks.rust-components]
+run = "rustup component add rustfmt clippy --toolchain 1.95.0"
+
 [tasks.fmt]
 run = "cargo fmt --all -- --check"
 
@@ -35,6 +38,7 @@ run = "scripts/ci/validate-openspec-pr.sh"
 
 [tasks.ci]
 run = """
+mise run rust-components
 mise run fmt
 mise run check
 mise run clippy
