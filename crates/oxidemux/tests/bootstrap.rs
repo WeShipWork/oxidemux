@@ -29,3 +29,19 @@ fn app_shell_status_contract_comes_from_oxmux_facade() {
     ));
     assert!(matches!(snapshot.health, oxmux::CoreHealthState::Healthy));
 }
+
+#[test]
+fn app_shell_exercises_health_runtime_through_oxmux() -> Result<(), Box<dyn std::error::Error>> {
+    let mut runtime =
+        oxmux::LocalHealthRuntime::start(oxmux::LocalHealthRuntimeConfig::loopback(0))?;
+    let snapshot = runtime.management_snapshot();
+
+    assert!(matches!(
+        snapshot.lifecycle,
+        oxmux::ProxyLifecycleState::Running { .. }
+    ));
+    assert!(snapshot.configuration.listen_address.is_loopback());
+
+    runtime.shutdown()?;
+    Ok(())
+}
