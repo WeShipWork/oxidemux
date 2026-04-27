@@ -23,6 +23,9 @@ jobs:
         with:
           cache: true
 
+      - name: Install toolchain
+        run: mise install
+
       - name: Run repository verification
         run: mise run ci
 
@@ -52,6 +55,9 @@ jobs:
         uses: jdx/mise-action@v3
         with:
           cache: true
+
+      - name: Install toolchain
+        run: mise install
 
       - name: Run repository verification
         run: mise run ci
