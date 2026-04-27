@@ -1,5 +1,7 @@
 use core::fmt;
 
+use crate::{ProtocolFamily, ProtocolTranslationDirection};
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CoreError {
     NotImplemented {
@@ -33,6 +35,16 @@ pub enum CoreError {
         message: String,
     },
     UsageQuotaSummary {
+        message: String,
+    },
+    ProtocolValidation {
+        field: &'static str,
+        message: String,
+    },
+    ProtocolTranslationDeferred {
+        direction: ProtocolTranslationDirection,
+        source_family: ProtocolFamily,
+        target_family: ProtocolFamily,
         message: String,
     },
 }
@@ -79,6 +91,18 @@ impl fmt::Display for CoreError {
             Self::UsageQuotaSummary { message } => {
                 write!(formatter, "usage quota summary failed: {message}")
             }
+            Self::ProtocolValidation { field, message } => {
+                write!(formatter, "protocol field {field} is invalid: {message}")
+            }
+            Self::ProtocolTranslationDeferred {
+                direction,
+                source_family,
+                target_family,
+                message,
+            } => write!(
+                formatter,
+                "protocol {direction:?} translation from {source_family:?} to {target_family:?} is deferred: {message}"
+            ),
         }
     }
 }
