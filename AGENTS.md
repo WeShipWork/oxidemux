@@ -139,14 +139,4 @@ When an agent opens or updates a pull request, it must:
 - Avoid conventional commit prefixes in PR titles (`fix:`, `feat:`, `docs:`, etc.).
 - Avoid trailing punctuation in PR titles.
 - Optionally prefix the title with a crate name when one crate is the clear scope (for example, `git_ui: Add history view`).
-- Include a `Release Notes:` section as the final section in the PR body.
-- Use one bullet under `Release Notes:`:
-  - `- Added ...`, `- Fixed ...`, or `- Improved ...` for user-facing changes, or
-  - `- N/A` for docs-only and other non-user-facing changes.
-- Format release notes exactly with a blank line after the heading, for example:
-
-```
-Release Notes:
-
-- N/A
-```
+- Follow `.github/PULL_REQUEST_TEMPLATE.md` for PR body fields, OpenSpec evidence, changelog expectations, checks, and release notes format.
