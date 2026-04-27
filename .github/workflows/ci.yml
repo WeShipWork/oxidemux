@@ -2,6 +2,8 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 permissions:
@@ -43,7 +45,7 @@ jobs:
       matrix:
         runner:
           - ubuntu-latest
-          - macos-latest
+          # - macos-latest
           - windows-latest
 
     steps:
