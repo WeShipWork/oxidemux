@@ -1,0 +1,14 @@
+[package]
+name = "oxidemux"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95.0"
+license = "MIT OR Apache-2.0"
+description = "A cross-platform Rust and GPUI-based AI subscription proxy shell inspired by VibeProxy."
+
+[[bin]]
+name = "oxidemux"
+path = "src/main.rs"
+
+[dependencies]
+oxmux = { path = "../oxmux" }
