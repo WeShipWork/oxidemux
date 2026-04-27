@@ -1,0 +1,9 @@
+/target/
+.DS_Store
+.env
+.env.*
+!.env.example
+.sisyphus/evidence/
+.sisyphus/drafts/
+.rumdl_cache/
+hk.local.pkl
