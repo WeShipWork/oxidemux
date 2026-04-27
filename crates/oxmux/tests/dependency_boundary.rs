@@ -13,6 +13,9 @@ fn core_manifest_excludes_app_and_ui_dependencies() -> std::io::Result<()> {
         "updater",
         "keyring",
         "secret-service",
+        "oauth",
+        "provider-sdk",
+        "packaging",
     ] {
         assert!(
             !manifest.contains(forbidden_dependency),
