@@ -16,3 +16,16 @@ fn binary_preserves_metadata_output() -> std::io::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn app_shell_status_contract_comes_from_oxmux_facade() {
+    let snapshot = oxmux::ManagementSnapshot::inert_bootstrap();
+
+    assert_eq!(snapshot.identity.crate_name, "oxmux");
+    assert!(!snapshot.identity.version.is_empty());
+    assert!(matches!(
+        snapshot.lifecycle,
+        oxmux::ProxyLifecycleState::Stopped
+    ));
+    assert!(matches!(snapshot.health, oxmux::CoreHealthState::Healthy));
+}

@@ -1,5 +1,5 @@
 fn main() {
-    let identity = oxmux::core_identity();
+    let _snapshot = oxmux::ManagementSnapshot::inert_bootstrap();
 
-    println!("{} {}", env!("CARGO_PKG_NAME"), identity.version);
+    println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 }
