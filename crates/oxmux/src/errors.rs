@@ -15,6 +15,20 @@ pub enum CoreError {
         field: &'static str,
         message: String,
     },
+    LocalRuntimeConfiguration {
+        field: &'static str,
+        message: String,
+    },
+    LocalRuntimeBind {
+        endpoint: String,
+        message: String,
+    },
+    LocalRuntimeHealthServing {
+        message: String,
+    },
+    LocalRuntimeShutdown {
+        message: String,
+    },
     ProviderAccountSummary {
         message: String,
     },
@@ -40,6 +54,24 @@ impl fmt::Display for CoreError {
                     formatter,
                     "configuration field {field} is invalid: {message}"
                 )
+            }
+            Self::LocalRuntimeConfiguration { field, message } => {
+                write!(
+                    formatter,
+                    "local runtime configuration field {field} is invalid: {message}"
+                )
+            }
+            Self::LocalRuntimeBind { endpoint, message } => {
+                write!(
+                    formatter,
+                    "local runtime failed to bind {endpoint}: {message}"
+                )
+            }
+            Self::LocalRuntimeHealthServing { message } => {
+                write!(formatter, "local runtime health serving failed: {message}")
+            }
+            Self::LocalRuntimeShutdown { message } => {
+                write!(formatter, "local runtime shutdown failed: {message}")
             }
             Self::ProviderAccountSummary { message } => {
                 write!(formatter, "provider account summary failed: {message}")

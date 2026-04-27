@@ -1,5 +1,6 @@
 pub mod configuration;
 pub mod errors;
+pub mod local_proxy_runtime;
 pub mod management;
 pub mod protocol;
 pub mod provider;
@@ -11,6 +12,10 @@ pub use configuration::{
     ConfigurationSnapshot, ConfigurationUpdateIntent, RoutingDefault, ValidatedConfigurationUpdate,
 };
 pub use errors::CoreError;
+pub use local_proxy_runtime::{
+    LOCAL_HEALTH_PATH, LOCAL_HEALTH_RESPONSE_BODY, LocalHealthRuntime, LocalHealthRuntimeConfig,
+    LocalHealthRuntimeStatus,
+};
 pub use management::{
     BoundEndpoint, CoreHealthState, LifecycleControlIntent, ManagementSnapshot,
     ProxyLifecycleState, UptimeMetadata,
