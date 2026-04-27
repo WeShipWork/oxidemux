@@ -1,7 +1,9 @@
 # OxideMux
 
 OxideMux is a cross-platform Rust workspace that will become a GPUI-based
-local AI subscription proxy and multiplexer inspired by VibeProxy.
+local AI subscription proxy and multiplexer. Its proxy and gateway direction is
+inspired by CLIProxyAPI, and its desktop control and monitoring direction is
+inspired by zero-limit.
 
 ## Status
 
@@ -139,10 +141,17 @@ refined during the UI implementation phase.
 
 ## Inspiration and Attribution
 
-The concept for OxideMux is inspired by
-[VibeProxy](https://github.com/automazeio/vibeproxy). We appreciate the vision
-behind that project. OxideMux is an independent, from-scratch implementation;
-no code or wording has been copied from the original repository.
+OxideMux is an independent, from-scratch implementation. Its proxy/gateway
+concepts are informed by
+[CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI), especially provider
+auth boundaries, API compatibility, routing, model aliases, fallback, streaming,
+and management endpoints. Its desktop concepts are informed by
+[zero-limit](https://github.com/0xtbug/zero-limit), especially quota monitoring,
+proxy lifecycle controls, tray/background operation, themes, and updates.
+
+The original product idea also drew inspiration from
+[VibeProxy](https://github.com/automazeio/vibeproxy). No code or wording has
+been copied from any inspiration project.
 
 ## License
 
