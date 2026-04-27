@@ -20,6 +20,13 @@ pub use management::{
     BoundEndpoint, CoreHealthState, LifecycleControlIntent, ManagementSnapshot,
     ProxyLifecycleState, UptimeMetadata,
 };
+pub use protocol::{
+    CanonicalProtocolRequest, CanonicalProtocolResponse, ClaudeProtocolMetadata,
+    CodexProtocolMetadata, DeferredProtocolTranslation, GeminiProtocolMetadata,
+    OpenAiProtocolMetadata, ProtocolBoundary, ProtocolMetadata, ProtocolPayload,
+    ProtocolPayloadBody, ProtocolResponseStatus, ProtocolTranslationDirection,
+    ProtocolTranslationOutcome, ProtocolTranslator, ProviderSpecificProtocolMetadata,
+};
 pub use provider::{
     AccountSummary, AuthMethodCategory, AuthState, DegradedReason, LastCheckedMetadata,
     ProtocolFamily, ProviderCapability, ProviderSummary,
