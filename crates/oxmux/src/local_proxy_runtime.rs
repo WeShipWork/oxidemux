@@ -12,6 +12,7 @@ use crate::{
 
 pub const LOCAL_HEALTH_PATH: &str = "/health";
 pub const LOCAL_HEALTH_RESPONSE_BODY: &str = "oxmux local health runtime: healthy\n";
+const MAX_LOCAL_HEALTH_REQUEST_BYTES: usize = 8 * 1024;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LocalHealthRuntimeConfig {
@@ -285,21 +286,49 @@ fn handle_connection(mut stream: TcpStream) -> Result<(), CoreError> {
             message: format!("failed to set request read timeout: {error}"),
         })?;
 
-    let mut buffer = [0; 1024];
-    let bytes_read =
-        stream
-            .read(&mut buffer)
-            .map_err(|error| CoreError::LocalRuntimeHealthServing {
-                message: error.to_string(),
-            })?;
-    let request = String::from_utf8_lossy(&buffer[..bytes_read]);
-    let request_line = request.lines().next().unwrap_or_default();
+    let request_line = read_request_line(&mut stream)?;
 
     if request_line == "GET /health HTTP/1.1" || request_line == "GET /health HTTP/1.0" {
         write_response(&mut stream, "200 OK", LOCAL_HEALTH_RESPONSE_BODY)
     } else {
         write_response(&mut stream, "404 Not Found", "")
     }
+}
+
+fn read_request_line(stream: &mut TcpStream) -> Result<String, CoreError> {
+    let mut request = Vec::new();
+    let mut buffer = [0; 512];
+
+    while request.len() < MAX_LOCAL_HEALTH_REQUEST_BYTES {
+        let bytes_read =
+            stream
+                .read(&mut buffer)
+                .map_err(|error| CoreError::LocalRuntimeHealthServing {
+                    message: error.to_string(),
+                })?;
+
+        if bytes_read == 0 {
+            break;
+        }
+
+        request.extend_from_slice(&buffer[..bytes_read]);
+
+        if request.contains(&b'\n') {
+            break;
+        }
+    }
+
+    let line_end = request
+        .iter()
+        .position(|byte| *byte == b'\n')
+        .unwrap_or(request.len());
+    let mut request_line = &request[..line_end];
+
+    if request_line.ends_with(b"\r") {
+        request_line = &request_line[..request_line.len() - 1];
+    }
+
+    Ok(String::from_utf8_lossy(request_line).into_owned())
 }
 
 fn write_response(stream: &mut TcpStream, status: &str, body: &str) -> Result<(), CoreError> {
