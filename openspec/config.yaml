@@ -1,0 +1,34 @@
+schema: spec-driven
+
+context: |
+  Tech stack: Rust 1.95.0, edition 2024, GPUI planned for native desktop UI
+  Project: oxidemux, a local AI subscription proxy and multiplexer inspired by VibeProxy
+  Status: minimal Rust crate today; proxy internals and GPUI UI are not implemented yet
+
+  Product direction:
+  - Match CLIProxyAPI's proxy/gateway concepts: provider auth, API compatibility, routing, model aliases, fallback, streaming, and management endpoints (https://github.com/router-for-me/CLIProxyAPI)
+  - Match zero-limit's desktop concepts: quota monitoring, proxy start/stop control, tray/background operation, themes, and updates (https://github.com/0xtbug/zero-limit)
+  - Split reusable core behavior into oxmux and keep oxidemux as the app/integration shell
+  - Let Rust agents and tools depend on oxmux directly without requiring a running oxidemux app
+  - Keep backend proxy behavior separate from user-visible desktop UI behavior
+
+  Rust conventions:
+  - Prefer correctness and clarity over cleverness
+  - Avoid unwrap(), panic-prone indexing, mod.rs files, and silent fallible error discards
+  - Propagate errors with ? or handle them explicitly so UI-facing failures stay visible
+
+rules:
+  specs:
+    - Distinguish oxmux library requirements from oxidemux app/integration requirements
+    - Separate desktop UI requirements from proxy/gateway requirements
+    - Be explicit about providers, protocols, routing modes, quota semantics, and failure states
+    - Include scenarios for provider auth, token refresh, streaming, proxy startup, and degraded service
+  tasks:
+    - Keep tasks independently verifiable
+    - Include cargo fmt, clippy, check, and test verification for Rust changes
+    - Add or update tests for behavior changes
+  design:
+    - Treat oxidemux as a consumer of oxmux, not the owner of core proxy behavior
+    - Prefer Rust-native and GPUI-compatible designs over web or Tauri assumptions
+    - Document credential storage, provider/account state, configuration, and management API boundaries
+    - Explain protocol translation between OpenAI, Gemini, Claude, Codex, and provider-specific APIs

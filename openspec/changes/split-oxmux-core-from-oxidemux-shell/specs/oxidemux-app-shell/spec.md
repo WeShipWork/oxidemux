@@ -1,0 +1,45 @@
+## ADDED Requirements
+
+### Requirement: App shell consumes core crate
+The system SHALL provide an `oxidemux` app shell crate that depends on `oxmux` for reusable core behavior instead of owning proxy, provider, routing, protocol, configuration, management, usage, or error primitives itself.
+
+#### Scenario: Dependency direction is app to core
+- **WHEN** maintainers inspect workspace package manifests
+- **THEN** `oxidemux` depends on `oxmux` and `oxmux` does not depend on `oxidemux`
+
+#### Scenario: App preserves bootstrap behavior
+- **WHEN** the `oxidemux` binary is run after the workspace split
+- **THEN** it preserves the existing bootstrap behavior or equivalent package metadata output while routing reusable data through `oxmux` where appropriate
+
+### Requirement: App shell owns desktop and integration concerns
+The `oxidemux` crate SHALL be the owner of future GPUI UI, settings UX, dashboard surfaces, tray/background lifecycle, updater, packaging, platform credential storage integrations, IDE/coding-environment adapters, and local IPC or server surfaces where useful.
+
+#### Scenario: GPUI remains app-owned
+- **WHEN** future GPUI or gpui-component dependencies are evaluated
+- **THEN** they are added only to the `oxidemux` app shell or a future app-owned crate, not to `oxmux`
+
+#### Scenario: Desktop proxy control remains app-owned
+- **WHEN** future proxy start/stop control, tray operation, or background lifecycle work is planned
+- **THEN** the app shell owns the desktop control surface while delegating reusable proxy lifecycle primitives to `oxmux`
+
+#### Scenario: Credential storage boundary remains explicit
+- **WHEN** future secure credential storage work is planned
+- **THEN** platform-specific storage implementations belong to `oxidemux` or app/platform adapters while reusable credential abstractions belong to `oxmux`
+
+### Requirement: App shell separates UI-visible state from core behavior
+The `oxidemux` crate SHALL adapt core state into user-visible UI or integration state without duplicating core routing, provider, quota, or protocol logic.
+
+#### Scenario: Quota dashboard planning keeps logic in core
+- **WHEN** future quota or usage dashboard work is planned
+- **THEN** `oxidemux` owns presentation and interaction while `oxmux` owns reusable usage/quota primitives and status data
+
+#### Scenario: Degraded service status is surfaced by app
+- **WHEN** future provider or account degraded states are exposed by `oxmux`
+- **THEN** `oxidemux` presents those states to users or integrations without reimplementing the degraded-state decision logic
+
+### Requirement: Workspace verification includes app shell
+The project verification commands SHALL include the `oxidemux` app shell crate in formatting, linting, checking, and testing.
+
+#### Scenario: App shell is checked by default verification
+- **WHEN** maintainers run the repository's documented cargo, mise, or CI verification commands
+- **THEN** the `oxidemux` crate is included in fmt, clippy, check, and test coverage
