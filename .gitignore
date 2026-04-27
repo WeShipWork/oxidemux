@@ -3,6 +3,8 @@
 .env
 .env.*
 !.env.example
+.factory/
+.sisyphus/
 .sisyphus/evidence/
 .sisyphus/drafts/
 .rumdl_cache/
