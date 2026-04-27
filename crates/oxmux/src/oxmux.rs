@@ -29,7 +29,10 @@ pub use protocol::{
 };
 pub use provider::{
     AccountSummary, AuthMethodCategory, AuthState, DegradedReason, LastCheckedMetadata,
-    ProtocolFamily, ProviderCapability, ProviderSummary,
+    MockProviderAccount, MockProviderHarness, MockProviderOutcome, ProtocolFamily,
+    ProviderCapability, ProviderExecutionFailure, ProviderExecutionMetadata,
+    ProviderExecutionOutcome, ProviderExecutionRequest, ProviderExecutionResult, ProviderExecutor,
+    ProviderSummary,
 };
 pub use usage::{MeteredValue, QuotaState, QuotaSummary, UsageSummary};
 

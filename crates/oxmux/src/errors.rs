@@ -1,6 +1,6 @@
 use core::fmt;
 
-use crate::{ProtocolFamily, ProtocolTranslationDirection};
+use crate::{ProtocolFamily, ProtocolTranslationDirection, ProviderExecutionFailure};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CoreError {
@@ -33,6 +33,11 @@ pub enum CoreError {
     },
     ProviderAccountSummary {
         message: String,
+    },
+    ProviderExecution {
+        provider_id: String,
+        account_id: Option<String>,
+        failure: ProviderExecutionFailure,
     },
     UsageQuotaSummary {
         message: String,
@@ -87,6 +92,17 @@ impl fmt::Display for CoreError {
             }
             Self::ProviderAccountSummary { message } => {
                 write!(formatter, "provider account summary failed: {message}")
+            }
+            Self::ProviderExecution {
+                provider_id,
+                account_id,
+                failure,
+            } => {
+                write!(formatter, "provider execution failed for {provider_id}")?;
+                if let Some(account_id) = account_id {
+                    write!(formatter, "/{account_id}")?;
+                }
+                write!(formatter, ": {}", failure.message())
             }
             Self::UsageQuotaSummary { message } => {
                 write!(formatter, "usage quota summary failed: {message}")
