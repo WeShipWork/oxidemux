@@ -11,6 +11,9 @@ jobs:
   quality:
     name: Quality
     runs-on: ubuntu-latest
+    env:
+      MISE_CARGO_HOME: ${{ github.workspace }}/.cargo
+      MISE_RUSTUP_HOME: ${{ github.workspace }}/.rustup
 
     steps:
       - name: Checkout
@@ -39,6 +42,9 @@ jobs:
   cross-platform-check:
     name: Cross-platform check (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
+    env:
+      MISE_CARGO_HOME: ${{ github.workspace }}/.cargo
+      MISE_RUSTUP_HOME: ${{ github.workspace }}/.rustup
     strategy:
       fail-fast: false
       matrix:
