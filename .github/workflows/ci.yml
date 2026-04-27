@@ -27,7 +27,7 @@ jobs:
           cache: true
 
       - name: Install toolchain
-        run: mise install
+        run: mise install --force --jobs=1 rust
 
       - name: Run repository verification
         run: mise run ci
@@ -63,7 +63,7 @@ jobs:
           cache: true
 
       - name: Install toolchain
-        run: mise install
+        run: mise install --force --jobs=1 rust
 
       - name: Run repository verification
         run: mise run ci
