@@ -14,7 +14,13 @@ fn core_manifest_excludes_app_and_ui_dependencies() -> std::io::Result<()> {
         "keyring",
         "secret-service",
         "oauth",
+        "reqwest",
+        "hyper",
+        "ureq",
         "provider-sdk",
+        "openai",
+        "anthropic",
+        "gemini",
         "packaging",
     ] {
         assert!(
