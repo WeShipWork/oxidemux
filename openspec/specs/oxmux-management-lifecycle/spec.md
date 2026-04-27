@@ -1,19 +1,25 @@
 ## Purpose
 
 Define the app-facing `oxmux` management, lifecycle, configuration, provider/account, and usage/quota facade that can be consumed without launching the desktop app or starting provider-backed proxy routing behavior.
-
 ## Requirements
-
 ### Requirement: Core exposes management snapshot
-The system SHALL provide an `oxmux` management snapshot that represents app-visible core state and can reflect the minimal local health runtime without requiring a running desktop app, GPUI window, IPC process, external provider call, OAuth flow, routing engine, quota fetch, or platform credential storage.
+The system SHALL provide an `oxmux` management snapshot that represents app-visible core state and can reflect the minimal local health runtime and deterministic mock provider execution health without requiring a running desktop app, GPUI window, IPC process, external provider call, OAuth flow, routing engine, network-backed quota fetch, or platform credential storage.
 
 #### Scenario: Snapshot can be constructed directly
 - **WHEN** Rust code depends on `oxmux` and constructs the management snapshot from in-memory values
 - **THEN** it can inspect core identity, lifecycle state, health state, configuration summary, provider/account summaries, usage/quota summaries, warnings, and errors without launching `oxidemux`
 
 #### Scenario: Snapshot reports degraded state
-- **WHEN** one or more provider accounts, configuration entries, or lifecycle checks are degraded
+- **WHEN** one or more provider accounts, mock provider outcomes, configuration entries, or lifecycle checks are degraded
 - **THEN** the management snapshot exposes structured degraded reasons that the app shell can display without reimplementing degradation logic
+
+#### Scenario: Snapshot reflects failed mock provider state
+- **WHEN** a deterministic mock provider execution outcome is failed
+- **THEN** provider/account summaries and snapshot health data can expose the failed state through existing `ProviderSummary`, `AccountSummary`, `CoreHealthState`, warnings, and structured `CoreError` values without app-shell-specific copies
+
+#### Scenario: Snapshot reflects quota-limited mock provider state
+- **WHEN** a deterministic mock provider execution outcome is quota-limited
+- **THEN** provider/account summaries and snapshot quota data can expose that state through existing `QuotaState` and `QuotaSummary` values without adding a mock-only quota model
 
 #### Scenario: Snapshot reflects local runtime status
 - **WHEN** the minimal local health runtime starts, fails to bind, runs, or shuts down
@@ -54,14 +60,18 @@ The system SHALL define typed configuration snapshots and update intents for app
 - **THEN** they can use explicit loopback listen settings and inspect the bound endpoint selected by the runtime
 
 ### Requirement: Core exposes provider and account summaries
-The system SHALL define provider and account summary types for app-visible provider status without implementing OAuth, token refresh, concrete provider clients, or platform credential storage.
+The system SHALL define provider and account summary types for app-visible provider status and deterministic mock provider execution status without implementing OAuth, token refresh, concrete provider clients, outbound provider calls, provider SDKs, or platform credential storage.
 
 #### Scenario: Provider capabilities are visible
-- **WHEN** `oxidemux` reads provider summaries from `oxmux`
+- **WHEN** `oxidemux` or another Rust consumer reads provider summaries from `oxmux`
 - **THEN** each provider can expose typed identity and capability metadata such as supported protocol family, streaming support, auth method category, and routing eligibility
 
+#### Scenario: Mock streaming capability is visible without streaming transport
+- **WHEN** a mock provider is configured as streaming-capable
+- **THEN** its provider capability metadata can indicate streaming support without requiring streaming adapters, network transports, or provider SDKs
+
 #### Scenario: Account auth and quota placeholders are visible
-- **WHEN** `oxidemux` reads account summaries from `oxmux`
+- **WHEN** `oxidemux` or another Rust consumer reads account summaries from `oxmux`
 - **THEN** each account can expose auth state, optional quota/status placeholder data, last-checked metadata, and degraded/error reasons without exposing stored secrets
 
 #### Scenario: Credential storage remains outside core implementation
@@ -85,3 +95,4 @@ The system SHALL expose structured errors for management snapshot, lifecycle int
 #### Scenario: App shell can display core lifecycle errors
 - **WHEN** a lifecycle or management operation fails in `oxmux`
 - **THEN** `oxidemux` can receive a typed error with enough category and message data to display or log it without string parsing internal implementation details
+

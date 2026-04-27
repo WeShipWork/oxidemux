@@ -2,9 +2,7 @@
 
 Define the `oxmux` headless Rust core crate boundary for direct library use
 without desktop UI, platform lifecycle, or app-shell dependencies.
-
 ## Requirements
-
 ### Requirement: Headless core crate boundary
 The system SHALL provide an `oxmux` Rust library crate that is usable without GPUI, desktop lifecycle code, tray integration, updater logic, packaging code, app-specific UI dependencies, provider execution dependencies, OAuth UI, or platform credential storage dependencies while owning reusable local proxy runtime behavior.
 
@@ -17,11 +15,15 @@ The system SHALL provide an `oxmux` Rust library crate that is usable without GP
 - **THEN** it can construct the public core facade and start, query, and shut down the minimal local health runtime without launching the `oxidemux` binary, opening a window, starting IPC, or contacting an external provider
 
 ### Requirement: Minimal public facade for future core domains
-The `oxmux` crate SHALL expose a small public facade that establishes ownership of proxy lifecycle, local health runtime, provider/auth, routing, protocol translation, configuration, streaming, management/status, usage/quota, and domain error primitives without implementing full provider or proxy routing behavior in this change.
+The `oxmux` crate SHALL expose a small public facade that establishes ownership of proxy lifecycle, local health runtime, provider/auth, provider execution, routing, protocol translation, configuration, streaming, management/status, usage/quota, and domain error primitives without implementing full provider SDK integration, outbound provider calls, credential storage, or proxy routing behavior in this change.
 
 #### Scenario: Provider auth ownership is visible but not implemented
 - **WHEN** maintainers inspect the `oxmux` public API or documentation
 - **THEN** provider authentication and token refresh are identified as future core concerns without requiring OAuth UI, platform credential storage, or concrete provider clients in this phase
+
+#### Scenario: Provider execution ownership exposes deterministic mock boundaries
+- **WHEN** maintainers inspect the `oxmux` public API or documentation after adding provider execution primitives
+- **THEN** provider execution is represented by trait, request, result, mock harness, and structured outcome primitives that can be used in deterministic tests without requiring real provider SDKs, HTTP clients, OAuth, platform credential storage, GPUI, or app-shell state
 
 #### Scenario: Routing ownership is visible but not implemented
 - **WHEN** maintainers inspect the `oxmux` public API or documentation
@@ -65,12 +67,17 @@ The `oxmux` public facade SHALL expose the minimal management/lifecycle primitiv
 - **THEN** the crate still does not depend on GPUI, gpui-component, tray libraries, updater libraries, packaging libraries, platform credential storage libraries, or the `oxidemux` app crate
 
 ### Requirement: Core facade remains runtime-inert for this change
-The `oxmux` management/lifecycle facade SHALL remain usable without starting network transports, protocol translators, provider clients, OAuth flows, token refresh, hot reload watchers, or background proxy routing behavior, while also supporting an explicit local health runtime start operation for smoke testing.
+The `oxmux` management/lifecycle and provider execution facade SHALL remain usable without starting provider network transports, concrete provider clients, OAuth flows, token refresh, hot reload watchers, background proxy routing behavior, GPUI, or app-shell state, while also supporting an explicit local health runtime start operation for smoke testing and deterministic in-memory mock provider execution for provider boundary tests.
 
 #### Scenario: Tests use deterministic local runtime state
 - **WHEN** core tests verify management snapshots, configuration validation, provider/account summaries, lifecycle states, usage/quota summaries, and local health runtime behavior
 - **THEN** they use deterministic in-memory values or loopback-only local listener state and do not require external network services, real credentials, provider accounts, a desktop app, or desktop platform APIs
 
+#### Scenario: Tests use deterministic mock provider state
+- **WHEN** core tests verify provider execution traits, mock provider outcomes, provider/account summary reflection, quota-limited outcomes, degraded outcomes, streaming-capable metadata, or failed mock outcomes
+- **THEN** they use deterministic in-memory mock providers and do not require external network services, real credentials, provider SDKs, OAuth flows, token refresh, raw secret storage, a desktop app, or desktop platform APIs
+
 #### Scenario: Protocol ownership remains explicit
-- **WHEN** provider capabilities or routing defaults reference OpenAI, Gemini, Claude, Codex, or provider-specific protocol families
+- **WHEN** provider capabilities, provider execution requests, or routing defaults reference OpenAI, Gemini, Claude, Codex, or provider-specific protocol families
 - **THEN** the facade identifies those protocol families as typed metadata but does not translate requests or responses in this change
+
