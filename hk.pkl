@@ -1,0 +1,142 @@
+amends "package://github.com/jdx/hk/releases/download/v1.36.0/hk@1.36.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v1.36.0/hk@1.36.0#/Builtins.pkl"
+
+exclude = List(
+    ".git",
+    "target",
+    ".sisyphus/evidence",
+    ".sisyphus/plans",
+    ".sisyphus/notepads",
+    ".sisyphus/boulder.json",
+    "logs",
+    "*.png",
+    "*.jpg",
+    "*.jpeg",
+    "*.gif",
+    "*.webp",
+    "*.ico",
+    "*.bmp",
+    "*.tiff",
+    "*.woff",
+    "*.woff2",
+    "*.ttf",
+    "*.eot",
+    "*.otf",
+    "*.pdf",
+    "*.zip",
+    "*.tar",
+    "*.tar.gz",
+    "*.tgz",
+    "*.gz",
+    "*.bz2",
+    "*.xz",
+    "*.7z",
+)
+display_skip_reasons = List()
+terminal_progress = false
+
+local binary_excludes = List(
+    "*.png",
+    "*.jpg",
+    "*.jpeg",
+    "*.gif",
+    "*.webp",
+    "*.ico",
+    "*.bmp",
+    "*.tiff",
+    "*.woff",
+    "*.woff2",
+    "*.ttf",
+    "*.eot",
+    "*.otf",
+    "*.pdf",
+    "*.zip",
+    "*.tar",
+    "*.tar.gz",
+    "*.tgz",
+    "*.gz",
+    "*.bz2",
+    "*.xz",
+    "*.7z",
+)
+
+local generated_excludes = List(
+    ".sisyphus/plans",
+    ".sisyphus/boulder.json",
+    "logs",
+    "AGENTS.md",
+)
+
+local file_excludes = List(
+    "*.png",
+    "*.jpg",
+    "*.jpeg",
+    "*.gif",
+    "*.webp",
+    "*.ico",
+    "*.bmp",
+    "*.tiff",
+    "*.woff",
+    "*.woff2",
+    "*.ttf",
+    "*.eot",
+    "*.otf",
+    "*.pdf",
+    "*.zip",
+    "*.tar",
+    "*.tar.gz",
+    "*.tgz",
+    "*.gz",
+    "*.bz2",
+    "*.xz",
+    "*.7z",
+    ".sisyphus/plans",
+    ".sisyphus/boulder.json",
+    "logs",
+)
+
+local quality_steps = new Mapping<String, Step> {
+    ["trailing-whitespace"] = (Builtins.trailing_whitespace) {
+        exclude = file_excludes
+    }
+    ["newlines"] = (Builtins.newlines) {
+        exclude = file_excludes
+    }
+    ["check-merge-conflict"] = Builtins.check_merge_conflict
+    ["typos"] = (Builtins.typos) {
+        exclude = file_excludes
+    }
+    ["rumdl"] {
+        glob = List("README.md")
+        exclude = generated_excludes
+        check = "sh -c 'rumdl check --no-cache --diff README.md' sh"
+    }
+    ["cargo-fmt"] {
+        glob = List("*.rs")
+        check = "scripts/quiet-on-success.sh cargo fmt --all -- --check"
+    }
+    ["cargo-check"] {
+        glob = List("*.rs", "Cargo.toml", "Cargo.lock")
+        check = "scripts/quiet-on-success.sh cargo check --all-targets --all-features"
+    }
+    ["cargo-clippy"] {
+        glob = List("*.rs", "Cargo.toml", "Cargo.lock")
+        check = "scripts/quiet-on-success.sh cargo clippy --all-targets --all-features -- -D warnings"
+    }
+    ["cargo-test"] {
+        glob = List("*.rs", "Cargo.toml", "Cargo.lock")
+        check = "scripts/quiet-on-success.sh cargo test --all-targets --all-features"
+    }
+}
+
+hooks {
+    ["pre-commit"] {
+        fix = true
+        stash = "git"
+        steps = quality_steps
+    }
+
+    ["check"] {
+        steps = quality_steps
+    }
+}

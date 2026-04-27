@@ -1,0 +1,31 @@
+[tools]
+rust = "1.95.0"
+hk = "1.36.0"
+pkl = "latest"
+typos = "latest"
+gitleaks = "latest"
+rumdl = "latest"
+
+[tasks.fmt]
+run = "cargo fmt --all -- --check"
+
+[tasks.fmt-fix]
+run = "cargo fmt --all"
+
+[tasks.check]
+run = "cargo check --all-targets --all-features"
+
+[tasks.clippy]
+run = "cargo clippy --all-targets --all-features -- -D warnings"
+
+[tasks.test]
+run = "cargo test --all-targets --all-features"
+
+[tasks.hk-check]
+run = "hk check --all"
+
+[tasks.hk-pre-commit]
+run = "hk run pre-commit"
+
+[tasks.ci]
+depends = ["fmt", "check", "clippy", "test"]
