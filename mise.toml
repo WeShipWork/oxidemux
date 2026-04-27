@@ -37,10 +37,10 @@ run = "hk run pre-commit"
 run = "scripts/ci/validate-openspec-pr.sh"
 
 [tasks.ci]
-run = """
-mise run rust-components
-mise run fmt
-mise run check
-mise run clippy
-mise run test
-"""
+run = [
+    "mise run rust-components",
+    "mise run fmt",
+    "mise run check",
+    "mise run clippy",
+    "mise run test",
+]
