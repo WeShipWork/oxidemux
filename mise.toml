@@ -34,4 +34,9 @@ run = "hk run pre-commit"
 run = "scripts/ci/validate-openspec-pr.sh"
 
 [tasks.ci]
-depends = ["fmt", "check", "clippy", "test"]
+run = """
+mise run fmt
+mise run check
+mise run clippy
+mise run test
+"""
