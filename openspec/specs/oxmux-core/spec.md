@@ -27,9 +27,9 @@ The `oxmux` crate SHALL expose a small public facade that establishes ownership 
 - **WHEN** maintainers inspect the `oxmux` public API or documentation
 - **THEN** model aliases, account targeting, priority, round-robin, failover, exhausted, and degraded routing states are identified as future core concerns without requiring routing algorithm implementations in this phase
 
-#### Scenario: Protocol ownership is visible but not implemented
+#### Scenario: Protocol ownership exposes typed skeleton boundaries
 - **WHEN** maintainers inspect the `oxmux` public API or documentation
-- **THEN** OpenAI, Gemini, Claude, Codex, and provider-specific protocol translation are identified as future core concerns without requiring request or response translators in this phase
+- **THEN** OpenAI, Gemini, Claude, Codex, and provider-specific protocol translation are represented by typed request/response boundaries, typed protocol metadata, and deferred translation results without requiring request translators, response translators, or outbound provider calls in this phase
 
 #### Scenario: Streaming ownership is visible but not implemented
 - **WHEN** maintainers inspect the `oxmux` public API or documentation
