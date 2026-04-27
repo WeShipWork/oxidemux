@@ -7,7 +7,19 @@ pub mod routing;
 pub mod streaming;
 pub mod usage;
 
+pub use configuration::{
+    ConfigurationSnapshot, ConfigurationUpdateIntent, RoutingDefault, ValidatedConfigurationUpdate,
+};
 pub use errors::CoreError;
+pub use management::{
+    BoundEndpoint, CoreHealthState, LifecycleControlIntent, ManagementSnapshot,
+    ProxyLifecycleState, UptimeMetadata,
+};
+pub use provider::{
+    AccountSummary, AuthMethodCategory, AuthState, DegradedReason, LastCheckedMetadata,
+    ProtocolFamily, ProviderCapability, ProviderSummary,
+};
+pub use usage::{MeteredValue, QuotaState, QuotaSummary, UsageSummary};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CoreIdentity {
