@@ -11,9 +11,6 @@ jobs:
   quality:
     name: Quality
     runs-on: ubuntu-latest
-    env:
-      MISE_CARGO_HOME: ${{ github.workspace }}/.cargo
-      MISE_RUSTUP_HOME: ${{ github.workspace }}/.rustup
 
     steps:
       - name: Checkout
@@ -24,10 +21,9 @@ jobs:
       - name: Set up mise
         uses: jdx/mise-action@v3
         with:
+          install: true
           cache: true
-
-      - name: Install toolchain
-        run: mise install --force --jobs=1 rust
+          experimental: true
 
       - name: Run repository verification
         run: mise run ci
@@ -42,9 +38,6 @@ jobs:
   cross-platform-check:
     name: Cross-platform check (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
-    env:
-      MISE_CARGO_HOME: ${{ github.workspace }}/.cargo
-      MISE_RUSTUP_HOME: ${{ github.workspace }}/.rustup
     strategy:
       fail-fast: false
       matrix:
@@ -60,10 +53,9 @@ jobs:
       - name: Set up mise
         uses: jdx/mise-action@v3
         with:
+          install: true
           cache: true
-
-      - name: Install toolchain
-        run: mise install --force --jobs=1 rust
+          experimental: true
 
       - name: Run repository verification
         run: mise run ci
