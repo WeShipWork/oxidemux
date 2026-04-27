@@ -84,6 +84,9 @@ inspired by zero-limit.
 - `rust-toolchain.toml`: Pinned Rust 1.95.0 toolchain.
 - `LICENSE-MIT` and `LICENSE-APACHE`: Dual-license files.
 - `.github/workflows/ci.yml`: Multi-platform verification workflow.
+- `CONTRIBUTING.md`: Contributor setup, OpenSpec workflow, and PR hygiene
+  guidance.
+- `CHANGELOG.md`: Notable project changes following Keep a Changelog format.
 
 ## Current Bootstrap Status
 
@@ -119,17 +122,22 @@ inspired by zero-limit.
 mise install
 mise trust
 
-# Configure git hooks
-git config --local core.hooksPath .hk-hooks
+# Install git hooks
+mise run hk-install
 
 # Run quality checks
 mise run ci
-hk validate
-hk check --all
+mise run hk-check
 ```
 
 The `mise run ci` task runs workspace-wide formatting, checking, clippy, and
-tests across both `oxmux` and `oxidemux`.
+tests across both `oxmux` and `oxidemux`. The `mise run hk-check` task runs the
+repository hook checks without requiring contributors to remember the underlying
+hk command.
+
+See `CONTRIBUTING.md` for the OpenSpec-first development workflow, PR template
+expectations, and the reason CI uses the same mise task graph as local
+verification.
 
 ## Project Direction
 
