@@ -24,8 +24,14 @@ run = "cargo test --all-targets --all-features"
 [tasks.hk-check]
 run = "hk check --all"
 
+[tasks.hk-install]
+run = "hk install"
+
 [tasks.hk-pre-commit]
 run = "hk run pre-commit"
+
+[tasks.openspec-validate]
+run = "scripts/ci/validate-openspec-pr.sh"
 
 [tasks.ci]
 depends = ["fmt", "check", "clippy", "test"]
