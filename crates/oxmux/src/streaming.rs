@@ -126,8 +126,8 @@ impl StreamContent {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StreamMetadata {
-    pub name: String,
-    pub value: String,
+    name: String,
+    value: String,
 }
 
 impl StreamMetadata {
@@ -143,6 +143,14 @@ impl StreamMetadata {
     fn validate(&self) -> Result<(), CoreError> {
         validate_required_text("stream.metadata.name", &self.name)?;
         validate_required_text("stream.metadata.value", &self.value)
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn value(&self) -> &str {
+        &self.value
     }
 }
 
@@ -188,9 +196,9 @@ impl CancellationReason {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StreamFailure {
-    pub code: String,
-    pub message: String,
-    pub provider_metadata: Option<String>,
+    code: String,
+    message: String,
+    provider_metadata: Option<String>,
 }
 
 impl StreamFailure {
@@ -220,6 +228,18 @@ impl StreamFailure {
             self.provider_metadata.as_deref(),
         )
     }
+
+    pub fn code(&self) -> &str {
+        &self.code
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    pub fn provider_metadata(&self) -> Option<&str> {
+        self.provider_metadata.as_deref()
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -232,7 +252,7 @@ impl StreamingFailure {
     pub fn message(&self) -> String {
         match self {
             Self::InvalidSequence { reason } => reason.message(),
-            Self::PreStreamFailure { failure } => failure.message.clone(),
+            Self::PreStreamFailure { failure } => failure.message().to_string(),
         }
     }
 }
@@ -276,11 +296,7 @@ fn validate_required_text(field: &'static str, value: &str) -> Result<(), CoreEr
     if value.trim().is_empty() {
         return Err(CoreError::Streaming {
             failure: StreamingFailure::PreStreamFailure {
-                failure: StreamFailure {
-                    code: "invalid_stream_field".to_string(),
-                    message: format!("{field} must not be blank"),
-                    provider_metadata: None,
-                },
+                failure: StreamFailure::invalid_field(format!("{field} must not be blank")),
             },
         });
     }
@@ -292,14 +308,22 @@ fn validate_optional_text(field: &'static str, value: Option<&str>) -> Result<()
     if matches!(value, Some(value) if value.trim().is_empty()) {
         return Err(CoreError::Streaming {
             failure: StreamingFailure::PreStreamFailure {
-                failure: StreamFailure {
-                    code: "invalid_stream_field".to_string(),
-                    message: format!("{field} must not be blank when present"),
-                    provider_metadata: None,
-                },
+                failure: StreamFailure::invalid_field(format!(
+                    "{field} must not be blank when present"
+                )),
             },
         });
     }
 
     Ok(())
+}
+
+impl StreamFailure {
+    fn invalid_field(message: String) -> Self {
+        Self {
+            code: "invalid_stream_field".to_string(),
+            message,
+            provider_metadata: None,
+        }
+    }
 }

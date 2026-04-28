@@ -261,12 +261,6 @@ impl ProviderExecutor for MockProviderHarness {
                 )),
                 metadata: self.metadata(),
             }),
-            MockProviderOutcome::StreamingCapable { response } => Ok(ProviderExecutionResult {
-                outcome: ProviderExecutionOutcome::Success(ResponseMode::complete(
-                    response.clone(),
-                )),
-                metadata: self.metadata(),
-            }),
             MockProviderOutcome::Failed(failure) => Err(CoreError::ProviderExecution {
                 provider_id: request.provider_id,
                 account_id: request.account_id,
@@ -365,9 +359,6 @@ pub enum MockProviderOutcome {
         quota_state: QuotaState,
     },
     Streaming(StreamingResponse),
-    StreamingCapable {
-        response: CanonicalProtocolResponse,
-    },
     Failed(ProviderExecutionFailure),
 }
 
@@ -399,7 +390,7 @@ impl MockProviderOutcome {
                 supports_streaming,
                 ..
             } => *supports_streaming || matches!(response_mode, ResponseMode::Streaming(_)),
-            Self::Streaming(_) | Self::StreamingCapable { .. } => true,
+            Self::Streaming(_) => true,
             Self::Success(_)
             | Self::Degraded { .. }
             | Self::QuotaLimited { .. }
@@ -441,7 +432,6 @@ impl MockProviderOutcome {
             Self::Success(_)
             | Self::Degraded { .. }
             | Self::QuotaLimited { .. }
-            | Self::StreamingCapable { .. }
             | Self::Failed(_) => {}
         }
 

@@ -1,8 +1,10 @@
 use oxmux::{
-    AuthMethodCategory, CoreError, FallbackBehavior, ModelAlias, ModelRoute, ProtocolFamily,
-    ProviderCapability, ProviderSummary, RoutingAvailabilitySnapshot, RoutingAvailabilityState,
-    RoutingBoundary, RoutingCandidate, RoutingDecisionMode, RoutingFailure, RoutingPolicy,
-    RoutingSelectionRequest, RoutingSkipReason, RoutingTarget, RoutingTargetAvailability,
+    AuthMethodCategory, CanonicalProtocolResponse, CoreError, FallbackBehavior,
+    MockProviderAccount, MockProviderHarness, MockProviderOutcome, ModelAlias, ModelRoute,
+    ProtocolFamily, ProtocolMetadata, ProtocolPayload, ProtocolResponseStatus,
+    RoutingAvailabilitySnapshot, RoutingAvailabilityState, RoutingBoundary, RoutingCandidate,
+    RoutingDecisionMode, RoutingFailure, RoutingPolicy, RoutingSelectionRequest, RoutingSkipReason,
+    RoutingTarget, RoutingTargetAvailability,
 };
 
 #[test]
@@ -31,19 +33,21 @@ fn model_alias_resolution_preserves_requested_and_resolved_models() -> Result<()
 #[test]
 fn streaming_capability_metadata_is_available_without_streaming_route_selection()
 -> Result<(), CoreError> {
-    let provider = ProviderSummary {
-        provider_id: "openai".to_string(),
-        display_name: "OpenAI".to_string(),
-        capabilities: vec![ProviderCapability {
-            protocol_family: ProtocolFamily::OpenAi,
-            supports_streaming: true,
-            auth_method: AuthMethodCategory::ApiKey,
-            routing_eligible: true,
-        }],
-        accounts: Vec::new(),
-        degraded_reasons: Vec::new(),
-    };
-    let target = RoutingTarget::provider_account("openai", "primary");
+    let provider = MockProviderHarness::new(
+        "openai",
+        "OpenAI",
+        ProtocolFamily::OpenAi,
+        AuthMethodCategory::ApiKey,
+        MockProviderOutcome::complete_streaming_capable(CanonicalProtocolResponse::new(
+            ProtocolMetadata::open_ai(),
+            ProtocolResponseStatus::success(),
+            ProtocolPayload::empty(),
+        )?),
+    )?
+    .with_account(MockProviderAccount::new("primary", "Primary account"))
+    .provider_summary();
+    let target =
+        RoutingTarget::provider_account(&provider.provider_id, &provider.accounts[0].account_id);
     let policy = policy_with_candidates(vec![target.clone()]);
     let availability = available_snapshot(vec![target.clone()]);
 

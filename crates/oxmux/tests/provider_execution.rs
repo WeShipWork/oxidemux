@@ -150,9 +150,9 @@ fn streaming_capable_mock_reports_capability_without_stream_transport() -> Resul
         "Mock Codex",
         ProtocolFamily::Codex,
         AuthMethodCategory::None,
-        MockProviderOutcome::StreamingCapable {
-            response: canonical_response(ProtocolMetadata::codex())?,
-        },
+        MockProviderOutcome::complete_streaming_capable(canonical_response(
+            ProtocolMetadata::codex(),
+        )?),
     )?;
 
     let result = executor.execute(ProviderExecutionRequest::new(
