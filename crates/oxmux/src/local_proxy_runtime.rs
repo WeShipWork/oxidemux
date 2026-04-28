@@ -346,12 +346,20 @@ fn handle_connection(
         .map_err(|error| CoreError::LocalRuntimeHealthServing {
             message: format!("failed to set request read timeout: {error}"),
         })?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(5)))
+        .map_err(|error| CoreError::LocalRuntimeHealthServing {
+            message: format!("failed to set response write timeout: {error}"),
+        })?;
 
     let request = match read_local_request(&mut stream) {
         Ok(request) => request,
-        Err(error) => {
+        Err(error @ CoreError::MinimalProxyRequestValidation { .. }) => {
             let response = MinimalProxyResponse::invalid_request(&error);
             return write_json_response(&mut stream, response.status_code, &response.body);
+        }
+        Err(error) => {
+            return write_connection_error_response(&mut stream, &error);
         }
     };
 
@@ -610,6 +618,27 @@ fn write_response(stream: &mut TcpStream, status: &str, body: &str) -> Result<()
         })
 }
 
+fn write_connection_error_response(
+    stream: &mut TcpStream,
+    error: &CoreError,
+) -> Result<(), CoreError> {
+    let status_code = if matches!(error, CoreError::LocalRuntimeHealthServing { .. }) {
+        408
+    } else {
+        500
+    };
+    let body = serde_json::json!({
+        "error": {
+            "code": "local_runtime_io",
+            "message": error.to_string(),
+            "type": "oxmux_proxy_error"
+        }
+    })
+    .to_string();
+
+    write_json_response(stream, status_code, &body)
+}
+
 fn write_json_response(
     stream: &mut TcpStream,
     status_code: u16,
@@ -619,6 +648,8 @@ fn write_json_response(
         200 => "OK",
         400 => "Bad Request",
         404 => "Not Found",
+        408 => "Request Timeout",
+        500 => "Internal Server Error",
         502 => "Bad Gateway",
         _ => "Internal Server Error",
     };

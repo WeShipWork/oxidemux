@@ -69,7 +69,7 @@ fn health_endpoint_returns_stable_success_response() -> Result<(), Box<dyn std::
 fn health_endpoint_accepts_fragmented_request_line() -> Result<(), Box<dyn std::error::Error>> {
     let mut runtime = LocalHealthRuntime::start(LocalHealthRuntimeConfig::loopback(0))?;
     let mut stream = TcpStream::connect(runtime.bound_endpoint().socket_addr)?;
-    stream.set_read_timeout(Some(Duration::from_secs(1)))?;
+    stream.set_read_timeout(Some(Duration::from_secs(3)))?;
     stream.write_all(b"GET /hea")?;
     stream.write_all(b"lth HTTP/1.1\r\nHost: localhost\r\n\r\n")?;
     stream.shutdown(Shutdown::Write)?;
@@ -167,6 +167,33 @@ fn conflicting_content_length_returns_400_and_runtime_keeps_serving()
         "unexpected response: {response:?}"
     );
     assert!(response.contains(r#""code":"unsupported_request_shape""#));
+
+    let health_response = request(socket_addr, "/health")?;
+    assert!(health_response.starts_with("HTTP/1.1 200 OK\r\n"));
+
+    runtime.shutdown()?;
+    Ok(())
+}
+
+#[test]
+fn incomplete_headers_return_connection_error_and_runtime_keeps_serving()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut runtime = LocalHealthRuntime::start_with_proxy_route(
+        LocalHealthRuntimeConfig::loopback(0),
+        proxy_route_config()?,
+    )?;
+    let socket_addr = runtime.bound_endpoint().socket_addr;
+    let response = raw_request(
+        socket_addr,
+        "POST /v1/chat/completions HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\n",
+    )?;
+
+    assert!(
+        response.starts_with("HTTP/1.1 408 Request Timeout\r\n"),
+        "unexpected response: {response:?}"
+    );
+    assert!(response.contains(r#""code":"local_runtime_io""#));
+    assert!(!response.contains(r#""code":"provider_execution_failed""#));
 
     let health_response = request(socket_addr, "/health")?;
     assert!(health_response.starts_with("HTTP/1.1 200 OK\r\n"));
@@ -351,7 +378,7 @@ fn proxy_route_config() -> Result<LocalProxyRouteConfig, CoreError> {
 
 fn raw_request(socket_addr: SocketAddr, request: &str) -> std::io::Result<String> {
     let mut stream = TcpStream::connect(socket_addr)?;
-    stream.set_read_timeout(Some(Duration::from_secs(1)))?;
+    stream.set_read_timeout(Some(Duration::from_secs(3)))?;
     stream.write_all(request.as_bytes())?;
     read_response(stream)
 }
