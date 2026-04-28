@@ -5,6 +5,13 @@ local AI subscription proxy and multiplexer. Its proxy and gateway direction is
 inspired by CLIProxyAPI, and its desktop control and monitoring direction is
 inspired by zero-limit.
 
+OxideMux exists because VibeProxy and zero-limit prove the subscription-aware
+local proxy experience is valuable, but this project needs that experience with
+first-class Linux, macOS, and Windows support. Subscription UX is the product
+center: account health, auth state, quota pressure, provider availability,
+routing choices, and recovery paths should be visible and controllable from one
+native app while remaining testable through a shared headless core.
+
 ## Status
 
 ### Completed
@@ -75,12 +82,17 @@ inspired by zero-limit.
 
 - `Cargo.toml`: Workspace manifest for all repository crates.
 - `crates/oxmux`: Headless reusable Rust core boundary. It currently exposes a
-  small identity facade plus placeholder domain boundaries for future provider,
-  routing, protocol, configuration, management, usage, streaming, and error
-  ownership.
+  small identity facade plus domain boundaries for provider execution, routing,
+  protocol, configuration, management, usage, streaming, and error ownership.
+  It is the home for subscription-aware routing, request rewrite primitives,
+  model aliases, reasoning/thinking compatibility behavior, and local proxy
+  contracts that must work without a desktop shell.
 - `crates/oxidemux`: App and integration shell. It owns the binary entrypoint
   and will own future GPUI, tray/background lifecycle, updater, packaging,
-  platform credential storage, and IDE adapter work.
+  platform credential storage, subscription onboarding/repair UI, and IDE
+  adapter work.
+- `docs/vision.md`: Canonical product intent for humans and agents.
+- `docs/architecture.md`: Crate boundary and architecture guardrails.
 - `rust-toolchain.toml`: Pinned Rust 1.95.0 toolchain.
 - `LICENSE-MIT` and `LICENSE-APACHE`: Dual-license files.
 - `.github/workflows/ci.yml`: Multi-platform verification workflow.
@@ -147,6 +159,13 @@ foundation, we intend to deliver a responsive and resource-efficient interface
 across Linux, macOS, and Windows. Platform support will be validated and
 refined during the UI implementation phase.
 
+The shared `oxmux` core owns behavior that must be consistent across platforms:
+protocol compatibility, request rewriting, model aliasing, reasoning/thinking
+options, subscription-aware routing, provider/account state, usage/quota
+summaries, and structured failures. The `oxidemux` app shell adapts that core to
+GPUI, tray/menu integration, notifications, platform credential storage,
+packaging, updates, and OS-specific lifecycle UX.
+
 ## Inspiration and Attribution
 
 OxideMux is an independent, from-scratch implementation. Its proxy/gateway
@@ -158,8 +177,10 @@ and management endpoints. Its desktop concepts are informed by
 proxy lifecycle controls, tray/background operation, themes, and updates.
 
 The original product idea also drew inspiration from
-[VibeProxy](https://github.com/automazeio/vibeproxy). No code or wording has
-been copied from any inspiration project.
+[VibeProxy](https://github.com/automazeio/vibeproxy), especially its
+subscription-first local proxy UX, auth/session handling, model aliases,
+provider-specific routing, and thinking/reasoning request compatibility layer.
+No code or wording has been copied from any inspiration project.
 
 ## License
 

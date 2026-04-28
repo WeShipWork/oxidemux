@@ -30,6 +30,7 @@ clearly non-behavioral changes, provide a short no-spec-required justification.
 
 - OpenSpec change/spec: <!-- openspec/changes/... or openspec/specs/... -->
 - No OpenSpec required: <!-- reason, if applicable -->
+- Vision/boundary impact: <!-- If this touches subscription UX, auth/session behavior, request rewrite, model aliases, reasoning/thinking compatibility, routing, provider selection, or crate boundaries, explain how docs/vision.md and docs/architecture.md are preserved. -->
 
 ## 📖 Documentation Checklist
 
@@ -49,6 +50,7 @@ Please confirm that you have followed these guidelines.
 - [ ] My code follows the project's coding standards.
 - [ ] I have added a `.env.example` file if environment variables are needed and ensured no secrets are committed.
 - [ ] My pull request is focused on a single project or change.
+- [ ] I preserved the `oxmux` shared-core and `oxidemux` platform-shell boundary, or documented the OpenSpec-approved reason for changing it.
 - [ ] I ran `mise run ci` locally, or explained why it was not applicable.
 - [ ] I ran relevant hk checks with `mise run hk-check`, or explained why they were not applicable.
 

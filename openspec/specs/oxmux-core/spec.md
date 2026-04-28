@@ -2,6 +2,13 @@
 
 Define the `oxmux` headless Rust core crate boundary for direct library use
 without desktop UI, platform lifecycle, or app-shell dependencies.
+
+`oxmux` is the shared product engine for subscription-aware local proxying. It
+owns reusable semantics for protocol compatibility, request rewriting, model
+aliases, reasoning/thinking compatibility primitives, subscription-aware routing,
+provider/account state, management snapshots, usage/quota state, and structured
+errors. Desktop shells and platform adapters provide UI and OS integrations, but
+they must not redefine those core semantics.
 ## Requirements
 ### Requirement: Headless core crate boundary
 The system SHALL provide an `oxmux` Rust library crate that is usable without GPUI, desktop lifecycle code, tray integration, updater logic, packaging code, app-specific UI dependencies, provider execution dependencies, OAuth UI, or platform credential storage dependencies while owning reusable local proxy runtime behavior.
@@ -40,6 +47,17 @@ The `oxmux` crate SHALL expose a small public facade that establishes ownership 
 #### Scenario: Management ownership includes local health runtime status
 - **WHEN** maintainers inspect the `oxmux` public API or documentation
 - **THEN** proxy lifecycle state, local health runtime status, provider listing, account health, usage, quota, and degraded service status are identified as core concerns while management endpoints beyond `/health` remain deferred
+
+### Requirement: Core owns subscription proxy semantics
+The `oxmux` crate SHALL own the reusable subscription-aware proxy semantics needed to normalize local AI requests, represent model aliases, expose reasoning/thinking request compatibility primitives, accept app-supplied provider/account availability, route requests through deterministic policy, and return structured outcomes without depending on GPUI, tray/menu libraries, OAuth UI, platform credential storage, provider SDKs, or the `oxidemux` app shell.
+
+#### Scenario: Thinking and model compatibility are core primitives
+- **WHEN** future local proxy request handling accepts provider-shaped or OpenAI-compatible requests that include model aliases, reasoning budgets, or thinking-mode conventions
+- **THEN** the normalization, typed metadata, and routing-relevant semantics are exposed through `oxmux` primitives while desktop-specific controls remain in `oxidemux`
+
+#### Scenario: Subscription state is supplied without shell-owned routing
+- **WHEN** future app or platform adapters know account auth health, quota pressure, subscription availability, degraded state, or user-selected provider/account preferences
+- **THEN** they pass typed availability inputs or credential references into `oxmux`, and `oxmux` owns the route selection, fallback reason, and structured failure outcome
 
 ### Requirement: Core errors remain visible to consumers
 The `oxmux` crate SHALL define or reserve a core error boundary so future fallible proxy, provider, configuration, routing, protocol, streaming, and management operations can propagate meaningful errors to library consumers and app layers.
@@ -80,4 +98,3 @@ The `oxmux` management/lifecycle and provider execution facade SHALL remain usab
 #### Scenario: Protocol ownership remains explicit
 - **WHEN** provider capabilities, provider execution requests, or routing defaults reference OpenAI, Gemini, Claude, Codex, or provider-specific protocol families
 - **THEN** the facade identifies those protocol families as typed metadata but does not translate requests or responses in this change
-

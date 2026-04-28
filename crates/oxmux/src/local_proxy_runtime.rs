@@ -281,7 +281,7 @@ fn serve_health_requests(
 
 fn handle_connection(mut stream: TcpStream) -> Result<(), CoreError> {
     stream
-        .set_read_timeout(Some(Duration::from_millis(100)))
+        .set_read_timeout(Some(Duration::from_secs(1)))
         .map_err(|error| CoreError::LocalRuntimeHealthServing {
             message: format!("failed to set request read timeout: {error}"),
         })?;
@@ -346,7 +346,7 @@ fn write_response(stream: &mut TcpStream, status: &str, body: &str) -> Result<()
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write;
+    use std::io::{ErrorKind, Write};
     use std::net::{Shutdown, TcpListener, TcpStream};
     use std::thread;
 
@@ -367,8 +367,15 @@ mod tests {
         });
 
         let mut stream = TcpStream::connect(socket_addr)?;
-        stream.write_all(&vec![b'a'; MAX_LOCAL_HEALTH_REQUEST_BYTES + 512])?;
-        stream.shutdown(Shutdown::Write)?;
+        match stream.write_all(&vec![b'a'; MAX_LOCAL_HEALTH_REQUEST_BYTES + 512]) {
+            Ok(()) => stream.shutdown(Shutdown::Write)?,
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    ErrorKind::BrokenPipe | ErrorKind::ConnectionReset | ErrorKind::NotConnected
+                ) => {}
+            Err(error) => return Err(error.into()),
+        }
 
         let request_line = match reader.join() {
             Ok(result) => result?,

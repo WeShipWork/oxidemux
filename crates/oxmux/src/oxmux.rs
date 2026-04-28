@@ -34,6 +34,12 @@ pub use provider::{
     ProviderExecutionOutcome, ProviderExecutionRequest, ProviderExecutionResult, ProviderExecutor,
     ProviderSummary,
 };
+pub use routing::{
+    FallbackBehavior, ModelAlias, ModelRoute, RoutingAvailabilitySnapshot,
+    RoutingAvailabilityState, RoutingBoundary, RoutingCandidate, RoutingDecisionMode,
+    RoutingFailure, RoutingPolicy, RoutingSelectionRequest, RoutingSelectionResult,
+    RoutingSkipReason, RoutingTarget, RoutingTargetAvailability, SkippedRoutingCandidate,
+};
 pub use usage::{MeteredValue, QuotaState, QuotaSummary, UsageSummary};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
