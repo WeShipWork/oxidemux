@@ -281,7 +281,7 @@ fn serve_health_requests(
 
 fn handle_connection(mut stream: TcpStream) -> Result<(), CoreError> {
     stream
-        .set_read_timeout(Some(Duration::from_millis(100)))
+        .set_read_timeout(Some(Duration::from_secs(1)))
         .map_err(|error| CoreError::LocalRuntimeHealthServing {
             message: format!("failed to set request read timeout: {error}"),
         })?;
