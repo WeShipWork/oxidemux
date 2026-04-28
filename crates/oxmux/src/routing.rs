@@ -536,7 +536,9 @@ impl RoutingSkipReason {
                 format!("degraded routing is not allowed: {reason}")
             }
             Self::DegradedDeferred { reason } => {
-                format!("degraded candidate deferred while healthy fallback is available: {reason}")
+                format!(
+                    "degraded candidate deferred while checking for a healthier route: {reason}"
+                )
             }
         }
     }

@@ -331,6 +331,12 @@ fn healthy_fallback_wins_over_degraded_higher_priority_candidate() -> Result<(),
         selection.skipped_candidates[0].reason,
         RoutingSkipReason::DegradedDeferred { .. }
     ));
+    assert!(
+        !selection.skipped_candidates[0]
+            .reason
+            .message()
+            .contains("healthy fallback is available")
+    );
     Ok(())
 }
 
