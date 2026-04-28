@@ -1,5 +1,5 @@
 use std::io::{Read, Write};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+use std::net::{IpAddr, Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::thread;
 use std::time::Duration;
 
@@ -63,11 +63,15 @@ fn health_endpoint_accepts_fragmented_request_line() -> Result<(), Box<dyn std::
     stream.set_read_timeout(Some(Duration::from_secs(1)))?;
     stream.write_all(b"GET /hea")?;
     stream.write_all(b"lth HTTP/1.1\r\nHost: localhost\r\n\r\n")?;
+    stream.shutdown(Shutdown::Write)?;
 
     let mut response = String::new();
     stream.read_to_string(&mut response)?;
 
-    assert!(response.starts_with("HTTP/1.1 200 OK\r\n"));
+    assert!(
+        response.starts_with("HTTP/1.1 200 OK\r\n"),
+        "unexpected response: {response:?}"
+    );
 
     runtime.shutdown()?;
     Ok(())
