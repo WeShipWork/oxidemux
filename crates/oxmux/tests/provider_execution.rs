@@ -6,7 +6,8 @@ use oxmux::{
     MockProviderAccount, MockProviderHarness, MockProviderOutcome, ProtocolFamily,
     ProtocolMetadata, ProtocolPayload, ProtocolPayloadBody, ProtocolResponseStatus,
     ProviderExecutionFailure, ProviderExecutionOutcome, ProviderExecutionRequest, ProviderExecutor,
-    ProxyLifecycleState, QuotaState, QuotaSummary, RoutingDefault, UsageSummary, core_identity,
+    ProxyLifecycleState, QuotaState, QuotaSummary, ResponseMode, RoutingDefault, StreamContent,
+    StreamEvent, StreamTerminalState, StreamingResponse, UsageSummary, core_identity,
 };
 
 #[test]
@@ -33,7 +34,7 @@ fn mock_provider_returns_success_without_translation_or_network() -> Result<(), 
         )?)?,
     )?)?;
 
-    assert_eq!(result.outcome.response(), &response);
+    assert_eq!(result.outcome.complete_response(), Some(&response));
     assert_eq!(result.metadata.provider.provider_id, "mock-openai");
     assert!(!result.metadata.provider.capabilities[0].supports_streaming);
     assert!(result.metadata.provider.capabilities[0].routing_eligible);
@@ -149,9 +150,9 @@ fn streaming_capable_mock_reports_capability_without_stream_transport() -> Resul
         "Mock Codex",
         ProtocolFamily::Codex,
         AuthMethodCategory::None,
-        MockProviderOutcome::StreamingCapable {
-            response: canonical_response(ProtocolMetadata::codex())?,
-        },
+        MockProviderOutcome::complete_streaming_capable(canonical_response(
+            ProtocolMetadata::codex(),
+        )?),
     )?;
 
     let result = executor.execute(ProviderExecutionRequest::new(
@@ -162,10 +163,218 @@ fn streaming_capable_mock_reports_capability_without_stream_transport() -> Resul
 
     assert!(matches!(
         result.outcome,
-        ProviderExecutionOutcome::StreamingCapable { .. }
+        ProviderExecutionOutcome::Success(_)
     ));
+    assert_eq!(
+        result
+            .outcome
+            .complete_response()
+            .expect("complete response"),
+        &canonical_response(ProtocolMetadata::codex())?
+    );
     assert!(result.metadata.provider.capabilities[0].supports_streaming);
     assert!(result.metadata.account.is_none());
+
+    Ok(())
+}
+
+#[test]
+fn mock_provider_returns_deterministic_streaming_response_events() -> Result<(), CoreError> {
+    let streaming_response = StreamingResponse::new(vec![
+        StreamEvent::Content(StreamContent::new(
+            ProtocolMetadata::open_ai(),
+            ProtocolPayload::opaque("application/json", br#"{"delta":"first"}"#.to_vec()),
+        )?),
+        StreamEvent::Content(StreamContent::new(
+            ProtocolMetadata::open_ai(),
+            ProtocolPayload::opaque("application/json", br#"{"delta":"second"}"#.to_vec()),
+        )?),
+        StreamEvent::Terminal(StreamTerminalState::completed()),
+    ])?;
+    let executor = MockProviderHarness::new(
+        "mock-streaming",
+        "Mock Streaming",
+        ProtocolFamily::OpenAi,
+        AuthMethodCategory::ApiKey,
+        MockProviderOutcome::streaming(streaming_response.clone()),
+    )?;
+
+    let result = executor.execute(ProviderExecutionRequest::new(
+        "mock-streaming",
+        None,
+        canonical_request(ProtocolMetadata::open_ai())?,
+    )?)?;
+
+    assert!(matches!(
+        result.outcome.response_mode(),
+        ResponseMode::Streaming(response) if response == &streaming_response
+    ));
+    assert_eq!(
+        result
+            .outcome
+            .response_mode()
+            .streaming_response()
+            .expect("streaming response")
+            .events(),
+        streaming_response.events()
+    );
+    assert!(result.metadata.provider.capabilities[0].supports_streaming);
+
+    Ok(())
+}
+
+#[test]
+fn mock_provider_delivers_cancelled_stream_as_response_data() -> Result<(), CoreError> {
+    let streaming_response = StreamingResponse::new(vec![StreamEvent::Terminal(
+        StreamTerminalState::cancelled(oxmux::CancellationReason::Timeout),
+    )])?;
+    let executor = MockProviderHarness::new(
+        "mock-cancelled-stream",
+        "Mock Cancelled Stream",
+        ProtocolFamily::OpenAi,
+        AuthMethodCategory::ApiKey,
+        MockProviderOutcome::streaming(streaming_response),
+    )?;
+
+    let result = executor.execute(ProviderExecutionRequest::new(
+        "mock-cancelled-stream",
+        None,
+        canonical_request(ProtocolMetadata::open_ai())?,
+    )?)?;
+
+    assert!(matches!(
+        result
+            .outcome
+            .response_mode()
+            .streaming_response()
+            .and_then(|response| response.terminal()),
+        Some(StreamTerminalState::Cancelled {
+            reason: oxmux::CancellationReason::Timeout,
+        })
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn mock_provider_delivers_errored_stream_as_response_data() -> Result<(), CoreError> {
+    let failure = oxmux::StreamFailure::new("upstream_error", "upstream ended stream")?;
+    let streaming_response = StreamingResponse::new(vec![StreamEvent::Terminal(
+        StreamTerminalState::errored(failure.clone()),
+    )])?;
+    let executor = MockProviderHarness::new(
+        "mock-errored-stream",
+        "Mock Errored Stream",
+        ProtocolFamily::OpenAi,
+        AuthMethodCategory::ApiKey,
+        MockProviderOutcome::streaming(streaming_response),
+    )?;
+
+    let result = executor.execute(ProviderExecutionRequest::new(
+        "mock-errored-stream",
+        None,
+        canonical_request(ProtocolMetadata::open_ai())?,
+    )?)?;
+
+    assert!(matches!(
+        result.outcome.response_mode().streaming_response().and_then(|response| response.terminal()),
+        Some(StreamTerminalState::Errored { failure: returned_failure }) if returned_failure == &failure
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn complete_mock_outcome_can_report_streaming_capability() -> Result<(), CoreError> {
+    let response = canonical_response(ProtocolMetadata::claude())?;
+    let executor = MockProviderHarness::new(
+        "mock-complete-streaming-capable",
+        "Mock Complete Streaming Capable",
+        ProtocolFamily::Claude,
+        AuthMethodCategory::OAuth,
+        MockProviderOutcome::complete_streaming_capable(response.clone()),
+    )?;
+
+    let result = executor.execute(ProviderExecutionRequest::new(
+        "mock-complete-streaming-capable",
+        None,
+        canonical_request(ProtocolMetadata::claude())?,
+    )?)?;
+
+    assert_eq!(result.outcome.complete_response(), Some(&response));
+    assert!(result.metadata.provider.capabilities[0].supports_streaming);
+
+    Ok(())
+}
+
+#[test]
+fn complete_degraded_mock_outcome_can_report_streaming_capability() -> Result<(), CoreError> {
+    let degraded_reason = DegradedReason {
+        component: "provider:mock-degraded-streaming-capable".to_string(),
+        message: "provider degraded while streaming-capable".to_string(),
+    };
+    let response = canonical_response(ProtocolMetadata::claude())?;
+    let executor = MockProviderHarness::new(
+        "mock-degraded-streaming-capable",
+        "Mock Degraded Streaming Capable",
+        ProtocolFamily::Claude,
+        AuthMethodCategory::OAuth,
+        MockProviderOutcome::DegradedWithMode {
+            response_mode: ResponseMode::complete(response.clone()),
+            supports_streaming: true,
+            reasons: vec![degraded_reason.clone()],
+        },
+    )?;
+
+    let result = executor.execute(ProviderExecutionRequest::new(
+        "mock-degraded-streaming-capable",
+        None,
+        canonical_request(ProtocolMetadata::claude())?,
+    )?)?;
+
+    assert_eq!(result.outcome.complete_response(), Some(&response));
+    assert!(matches!(
+        result.outcome,
+        ProviderExecutionOutcome::Degraded { ref reasons, .. }
+            if reasons == std::slice::from_ref(&degraded_reason)
+    ));
+    assert!(result.metadata.provider.capabilities[0].supports_streaming);
+
+    Ok(())
+}
+
+#[test]
+fn complete_quota_limited_mock_outcome_can_report_streaming_capability() -> Result<(), CoreError> {
+    let response = canonical_response(ProtocolMetadata::gemini())?;
+    let quota_state = QuotaState::Limited {
+        remaining: 3,
+        limit: 100,
+    };
+    let executor = MockProviderHarness::new(
+        "mock-quota-streaming-capable",
+        "Mock Quota Streaming Capable",
+        ProtocolFamily::Gemini,
+        AuthMethodCategory::ExternalReference,
+        MockProviderOutcome::QuotaLimitedWithMode {
+            response_mode: ResponseMode::complete(response.clone()),
+            supports_streaming: true,
+            quota_state: quota_state.clone(),
+        },
+    )?;
+
+    let result = executor.execute(ProviderExecutionRequest::new(
+        "mock-quota-streaming-capable",
+        None,
+        canonical_request(ProtocolMetadata::gemini())?,
+    )?)?;
+
+    assert_eq!(result.outcome.complete_response(), Some(&response));
+    assert!(matches!(
+        result.outcome,
+        ProviderExecutionOutcome::QuotaLimited { ref quota_state, .. }
+            if quota_state == &QuotaState::Limited { remaining: 3, limit: 100 }
+    ));
+    assert!(result.metadata.provider.capabilities[0].supports_streaming);
 
     Ok(())
 }

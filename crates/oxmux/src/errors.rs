@@ -2,6 +2,7 @@ use core::fmt;
 
 use crate::{
     ProtocolFamily, ProtocolTranslationDirection, ProviderExecutionFailure, RoutingFailure,
+    StreamingFailure,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -56,6 +57,9 @@ pub enum CoreError {
     },
     Routing {
         failure: RoutingFailure,
+    },
+    Streaming {
+        failure: StreamingFailure,
     },
 }
 
@@ -126,6 +130,9 @@ impl fmt::Display for CoreError {
             ),
             Self::Routing { failure } => {
                 write!(formatter, "routing failed: {}", failure.message())
+            }
+            Self::Streaming { failure } => {
+                write!(formatter, "streaming failed: {}", failure.message())
             }
         }
     }

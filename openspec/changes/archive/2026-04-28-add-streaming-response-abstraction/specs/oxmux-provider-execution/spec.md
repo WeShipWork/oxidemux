@@ -1,18 +1,4 @@
-# oxmux-provider-execution Specification
-
-## Purpose
-TBD - created by archiving change define-provider-execution-mock-harness. Update Purpose after archive.
-## Requirements
-### Requirement: Provider execution trait boundary
-The `oxmux` core SHALL expose a provider execution trait boundary that accepts an explicitly selected provider/account execution request using canonical protocol request data and returns a structured provider execution outcome without requiring provider SDKs, HTTP clients, OAuth flows, platform credential storage, GPUI, or `oxidemux` app-shell state.
-
-#### Scenario: Execute explicit provider request
-- **WHEN** a Rust consumer constructs a provider execution request with a provider identifier, optional account identifier, and `CanonicalProtocolRequest`
-- **THEN** a provider executor can process the request through typed `oxmux` primitives without launching `oxidemux`, opening a window, starting IPC, performing protocol translation, contacting an external provider, or reading stored credentials
-
-#### Scenario: Execution boundary returns structured failures
-- **WHEN** a provider execution boundary cannot complete a request because the selected mock outcome is failed or invalid
-- **THEN** `oxmux` returns a structured provider execution error that callers can match without parsing display text
+## MODIFIED Requirements
 
 ### Requirement: Deterministic mock provider harness
 The `oxmux` core SHALL provide an in-repo mock provider harness for tests that can deterministically return success, degraded, quota-limited, streaming-capable metadata, deterministic streaming response, and failed provider execution outcomes.
@@ -49,17 +35,6 @@ The `oxmux` core SHALL provide an in-repo mock provider harness for tests that c
 - **WHEN** a test configures a mock provider with a failed outcome
 - **THEN** the harness returns a structured provider execution failure and can surface failed provider health through existing `oxmux` health and summary types
 
-### Requirement: Provider/account summary reflection
-The `oxmux` provider execution mock harness SHALL reflect mock provider health through existing provider, account, quota, degraded reason, and management snapshot types instead of introducing app-shell-specific or mock-only summary copies.
-
-#### Scenario: Mock provider summary uses core provider models
-- **WHEN** a mock provider is inspected after execution
-- **THEN** its provider and account state is represented with `ProviderSummary`, `ProviderCapability`, `AccountSummary`, `AuthState`, `QuotaState`, `LastCheckedMetadata`, and `DegradedReason` as applicable
-
-#### Scenario: Management snapshot can include mock provider health
-- **WHEN** a management snapshot is constructed from mock provider summary data
-- **THEN** it can expose provider health, account health, quota state, warnings, and errors through `ManagementSnapshot` and `CoreHealthState` without duplicating state in `oxidemux`
-
 ### Requirement: Default provider execution tests remain networkless
 Default `oxmux` tests for provider execution SHALL use deterministic in-memory mocks and SHALL NOT require real provider accounts, credentials, provider SDKs, outbound provider network calls, upstream streaming endpoints, OAuth flows, token refresh, platform secret storage, GPUI, or `oxidemux` app-shell dependencies.
 
@@ -70,4 +45,3 @@ Default `oxmux` tests for provider execution SHALL use deterministic in-memory m
 #### Scenario: Streaming mock tests use in-memory events
 - **WHEN** maintainers run provider execution tests for streaming mock outcomes
 - **THEN** those tests assert deterministic in-memory stream events, terminal states, event order, validation reuse, and streaming capability metadata without contacting real streaming endpoints or depending on provider transport code
-

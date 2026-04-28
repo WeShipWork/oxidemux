@@ -40,6 +40,11 @@ pub use routing::{
     RoutingFailure, RoutingPolicy, RoutingSelectionRequest, RoutingSelectionResult,
     RoutingSkipReason, RoutingTarget, RoutingTargetAvailability, SkippedRoutingCandidate,
 };
+pub use streaming::{
+    CancellationReason, InvalidStreamSequence, ResponseMode, StreamContent, StreamEvent,
+    StreamFailure, StreamMetadata, StreamTerminalState, StreamingBoundary, StreamingFailure,
+    StreamingResponse,
+};
 pub use usage::{MeteredValue, QuotaState, QuotaSummary, UsageSummary};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

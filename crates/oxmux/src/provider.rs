@@ -3,6 +3,7 @@ pub struct ProviderAuthBoundary;
 
 use crate::CoreError;
 use crate::protocol::{CanonicalProtocolRequest, CanonicalProtocolResponse};
+use crate::streaming::{ResponseMode, StreamingResponse};
 use crate::usage::QuotaState;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -42,28 +43,28 @@ pub struct ProviderExecutionResult {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ProviderExecutionOutcome {
-    Success(CanonicalProtocolResponse),
+    Success(ResponseMode),
     Degraded {
-        response: CanonicalProtocolResponse,
+        response_mode: ResponseMode,
         reasons: Vec<DegradedReason>,
     },
     QuotaLimited {
-        response: CanonicalProtocolResponse,
+        response_mode: ResponseMode,
         quota_state: QuotaState,
-    },
-    StreamingCapable {
-        response: CanonicalProtocolResponse,
     },
 }
 
 impl ProviderExecutionOutcome {
-    pub fn response(&self) -> &CanonicalProtocolResponse {
+    pub fn response_mode(&self) -> &ResponseMode {
         match self {
-            Self::Success(response)
-            | Self::Degraded { response, .. }
-            | Self::QuotaLimited { response, .. }
-            | Self::StreamingCapable { response } => response,
+            Self::Success(response_mode)
+            | Self::Degraded { response_mode, .. }
+            | Self::QuotaLimited { response_mode, .. } => response_mode,
         }
+    }
+
+    pub fn complete_response(&self) -> Option<&CanonicalProtocolResponse> {
+        self.response_mode().complete_response()
     }
 }
 
@@ -166,6 +167,7 @@ impl MockProviderHarness {
         if let Some(account) = &self.account {
             account.validate()?;
         }
+        self.outcome.validate()?;
         Ok(())
     }
 }
@@ -203,12 +205,31 @@ impl ProviderExecutor for MockProviderHarness {
 
         match &self.outcome {
             MockProviderOutcome::Success(response) => Ok(ProviderExecutionResult {
-                outcome: ProviderExecutionOutcome::Success(response.clone()),
+                outcome: ProviderExecutionOutcome::Success(ResponseMode::complete(
+                    response.clone(),
+                )),
                 metadata: self.metadata(),
             }),
+            MockProviderOutcome::SuccessWithMode { response_mode, .. } => {
+                Ok(ProviderExecutionResult {
+                    outcome: ProviderExecutionOutcome::Success(response_mode.clone()),
+                    metadata: self.metadata(),
+                })
+            }
             MockProviderOutcome::Degraded { response, reasons } => Ok(ProviderExecutionResult {
                 outcome: ProviderExecutionOutcome::Degraded {
-                    response: response.clone(),
+                    response_mode: ResponseMode::complete(response.clone()),
+                    reasons: reasons.clone(),
+                },
+                metadata: self.metadata(),
+            }),
+            MockProviderOutcome::DegradedWithMode {
+                response_mode,
+                supports_streaming: _,
+                reasons,
+            } => Ok(ProviderExecutionResult {
+                outcome: ProviderExecutionOutcome::Degraded {
+                    response_mode: response_mode.clone(),
                     reasons: reasons.clone(),
                 },
                 metadata: self.metadata(),
@@ -218,15 +239,26 @@ impl ProviderExecutor for MockProviderHarness {
                 quota_state,
             } => Ok(ProviderExecutionResult {
                 outcome: ProviderExecutionOutcome::QuotaLimited {
-                    response: response.clone(),
+                    response_mode: ResponseMode::complete(response.clone()),
                     quota_state: quota_state.clone(),
                 },
                 metadata: self.metadata(),
             }),
-            MockProviderOutcome::StreamingCapable { response } => Ok(ProviderExecutionResult {
-                outcome: ProviderExecutionOutcome::StreamingCapable {
-                    response: response.clone(),
+            MockProviderOutcome::QuotaLimitedWithMode {
+                response_mode,
+                supports_streaming: _,
+                quota_state,
+            } => Ok(ProviderExecutionResult {
+                outcome: ProviderExecutionOutcome::QuotaLimited {
+                    response_mode: response_mode.clone(),
+                    quota_state: quota_state.clone(),
                 },
+                metadata: self.metadata(),
+            }),
+            MockProviderOutcome::Streaming(response) => Ok(ProviderExecutionResult {
+                outcome: ProviderExecutionOutcome::Success(ResponseMode::Streaming(
+                    response.clone(),
+                )),
                 metadata: self.metadata(),
             }),
             MockProviderOutcome::Failed(failure) => Err(CoreError::ProviderExecution {
@@ -304,28 +336,73 @@ impl MockProviderAccount {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum MockProviderOutcome {
     Success(CanonicalProtocolResponse),
+    SuccessWithMode {
+        response_mode: ResponseMode,
+        supports_streaming: bool,
+    },
     Degraded {
         response: CanonicalProtocolResponse,
+        reasons: Vec<DegradedReason>,
+    },
+    DegradedWithMode {
+        response_mode: ResponseMode,
+        supports_streaming: bool,
         reasons: Vec<DegradedReason>,
     },
     QuotaLimited {
         response: CanonicalProtocolResponse,
         quota_state: QuotaState,
     },
-    StreamingCapable {
-        response: CanonicalProtocolResponse,
+    QuotaLimitedWithMode {
+        response_mode: ResponseMode,
+        supports_streaming: bool,
+        quota_state: QuotaState,
     },
+    Streaming(StreamingResponse),
     Failed(ProviderExecutionFailure),
 }
 
 impl MockProviderOutcome {
+    pub fn complete_streaming_capable(response: CanonicalProtocolResponse) -> Self {
+        Self::SuccessWithMode {
+            response_mode: ResponseMode::complete(response),
+            supports_streaming: true,
+        }
+    }
+
+    pub fn streaming(response: StreamingResponse) -> Self {
+        Self::Streaming(response)
+    }
+
     fn supports_streaming(&self) -> bool {
-        matches!(self, Self::StreamingCapable { .. })
+        match self {
+            Self::SuccessWithMode {
+                supports_streaming,
+                response_mode,
+            } => *supports_streaming || matches!(response_mode, ResponseMode::Streaming(_)),
+            Self::DegradedWithMode {
+                response_mode,
+                supports_streaming,
+                ..
+            }
+            | Self::QuotaLimitedWithMode {
+                response_mode,
+                supports_streaming,
+                ..
+            } => *supports_streaming || matches!(response_mode, ResponseMode::Streaming(_)),
+            Self::Streaming(_) => true,
+            Self::Success(_)
+            | Self::Degraded { .. }
+            | Self::QuotaLimited { .. }
+            | Self::Failed(_) => false,
+        }
     }
 
     fn degraded_reasons(&self) -> Vec<DegradedReason> {
         match self {
-            Self::Degraded { reasons, .. } => reasons.clone(),
+            Self::Degraded { reasons, .. } | Self::DegradedWithMode { reasons, .. } => {
+                reasons.clone()
+            }
             Self::Failed(failure) => vec![DegradedReason {
                 component: "provider_execution".to_string(),
                 message: failure.message().to_string(),
@@ -336,9 +413,29 @@ impl MockProviderOutcome {
 
     fn quota_state(&self) -> Option<QuotaState> {
         match self {
-            Self::QuotaLimited { quota_state, .. } => Some(quota_state.clone()),
+            Self::QuotaLimited { quota_state, .. }
+            | Self::QuotaLimitedWithMode { quota_state, .. } => Some(quota_state.clone()),
             _ => None,
         }
+    }
+
+    fn validate(&self) -> Result<(), CoreError> {
+        match self {
+            Self::SuccessWithMode { response_mode, .. }
+            | Self::DegradedWithMode { response_mode, .. }
+            | Self::QuotaLimitedWithMode { response_mode, .. } => {
+                if let ResponseMode::Streaming(response) = response_mode {
+                    response.validate()?;
+                }
+            }
+            Self::Streaming(response) => response.validate()?,
+            Self::Success(_)
+            | Self::Degraded { .. }
+            | Self::QuotaLimited { .. }
+            | Self::Failed(_) => {}
+        }
+
+        Ok(())
     }
 }
 

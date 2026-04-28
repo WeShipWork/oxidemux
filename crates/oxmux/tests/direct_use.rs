@@ -4,9 +4,10 @@ use std::time::Duration;
 use oxmux::{
     AccountSummary, AuthMethodCategory, AuthState, BoundEndpoint, ConfigurationSnapshot,
     ConfigurationUpdateIntent, CoreError, CoreHealthState, DegradedReason, LastCheckedMetadata,
-    LifecycleControlIntent, ManagementSnapshot, MeteredValue, ProtocolFamily, ProviderCapability,
-    ProviderSummary, ProxyLifecycleState, QuotaState, QuotaSummary, RoutingDefault, UptimeMetadata,
-    UsageSummary, core_identity,
+    LifecycleControlIntent, ManagementSnapshot, MeteredValue, ProtocolFamily, ProtocolMetadata,
+    ProtocolPayload, ProviderCapability, ProviderSummary, ProxyLifecycleState, QuotaState,
+    QuotaSummary, ResponseMode, RoutingDefault, StreamEvent, StreamMetadata, StreamTerminalState,
+    StreamingResponse, UptimeMetadata, UsageSummary, core_identity,
 };
 
 #[test]
@@ -15,6 +16,22 @@ fn core_can_be_used_directly() {
 
     assert_eq!(identity.crate_name, "oxmux");
     assert_eq!(identity.version, "0.1.0");
+}
+
+#[test]
+fn streaming_primitives_are_usable_through_public_facade() -> Result<(), CoreError> {
+    let stream = StreamingResponse::new(vec![
+        StreamEvent::Metadata(StreamMetadata::new("provider", "mock")?),
+        StreamEvent::Terminal(StreamTerminalState::completed()),
+    ])?;
+    let mode = ResponseMode::Streaming(stream.clone());
+
+    assert!(mode.complete_response().is_none());
+    assert_eq!(mode.streaming_response(), Some(&stream));
+    assert_eq!(ProtocolMetadata::open_ai().family(), ProtocolFamily::OpenAi);
+    assert!(matches!(ProtocolPayload::empty(), ProtocolPayload { .. }));
+
+    Ok(())
 }
 
 #[test]

@@ -1,8 +1,10 @@
 use oxmux::{
-    CoreError, FallbackBehavior, ModelAlias, ModelRoute, RoutingAvailabilitySnapshot,
-    RoutingAvailabilityState, RoutingBoundary, RoutingCandidate, RoutingDecisionMode,
-    RoutingFailure, RoutingPolicy, RoutingSelectionRequest, RoutingSkipReason, RoutingTarget,
-    RoutingTargetAvailability,
+    AuthMethodCategory, CanonicalProtocolResponse, CoreError, FallbackBehavior,
+    MockProviderAccount, MockProviderHarness, MockProviderOutcome, ModelAlias, ModelRoute,
+    ProtocolFamily, ProtocolMetadata, ProtocolPayload, ProtocolResponseStatus,
+    RoutingAvailabilitySnapshot, RoutingAvailabilityState, RoutingBoundary, RoutingCandidate,
+    RoutingDecisionMode, RoutingFailure, RoutingPolicy, RoutingSelectionRequest, RoutingSkipReason,
+    RoutingTarget, RoutingTargetAvailability,
 };
 
 #[test]
@@ -25,6 +27,36 @@ fn model_alias_resolution_preserves_requested_and_resolved_models() -> Result<()
     assert_eq!(selection.resolved_model, "gpt-4o");
     assert_eq!(selection.selected_target, openai);
     assert_eq!(selection.decision_mode, RoutingDecisionMode::Priority);
+    Ok(())
+}
+
+#[test]
+fn streaming_capability_metadata_is_available_without_streaming_route_selection()
+-> Result<(), CoreError> {
+    let provider = MockProviderHarness::new(
+        "openai",
+        "OpenAI",
+        ProtocolFamily::OpenAi,
+        AuthMethodCategory::ApiKey,
+        MockProviderOutcome::complete_streaming_capable(CanonicalProtocolResponse::new(
+            ProtocolMetadata::open_ai(),
+            ProtocolResponseStatus::success(),
+            ProtocolPayload::empty(),
+        )?),
+    )?
+    .with_account(MockProviderAccount::new("primary", "Primary account"))
+    .provider_summary();
+    let target =
+        RoutingTarget::provider_account(&provider.provider_id, &provider.accounts[0].account_id);
+    let policy = policy_with_candidates(vec![target.clone()]);
+    let availability = available_snapshot(vec![target.clone()]);
+
+    let selection = policy.select(&RoutingSelectionRequest::new("gpt-4o"), &availability)?;
+
+    assert!(provider.capabilities[0].supports_streaming);
+    assert_eq!(selection.selected_target, target);
+    assert_eq!(selection.decision_mode, RoutingDecisionMode::Priority);
+
     Ok(())
 }
 
