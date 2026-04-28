@@ -337,6 +337,11 @@ fn handle_connection(
     proxy_route: Option<&LocalProxyRouteConfig>,
 ) -> Result<(), CoreError> {
     stream
+        .set_nonblocking(false)
+        .map_err(|error| CoreError::LocalRuntimeHealthServing {
+            message: format!("failed to configure connection as blocking: {error}"),
+        })?;
+    stream
         .set_read_timeout(Some(Duration::from_secs(1)))
         .map_err(|error| CoreError::LocalRuntimeHealthServing {
             message: format!("failed to set request read timeout: {error}"),
