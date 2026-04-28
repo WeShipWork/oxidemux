@@ -1,8 +1,8 @@
 use oxmux::{
-    CoreError, FallbackBehavior, ModelAlias, ModelRoute, RoutingAvailabilitySnapshot,
-    RoutingAvailabilityState, RoutingBoundary, RoutingCandidate, RoutingDecisionMode,
-    RoutingFailure, RoutingPolicy, RoutingSelectionRequest, RoutingSkipReason, RoutingTarget,
-    RoutingTargetAvailability,
+    AuthMethodCategory, CoreError, FallbackBehavior, ModelAlias, ModelRoute, ProtocolFamily,
+    ProviderCapability, ProviderSummary, RoutingAvailabilitySnapshot, RoutingAvailabilityState,
+    RoutingBoundary, RoutingCandidate, RoutingDecisionMode, RoutingFailure, RoutingPolicy,
+    RoutingSelectionRequest, RoutingSkipReason, RoutingTarget, RoutingTargetAvailability,
 };
 
 #[test]
@@ -25,6 +25,34 @@ fn model_alias_resolution_preserves_requested_and_resolved_models() -> Result<()
     assert_eq!(selection.resolved_model, "gpt-4o");
     assert_eq!(selection.selected_target, openai);
     assert_eq!(selection.decision_mode, RoutingDecisionMode::Priority);
+    Ok(())
+}
+
+#[test]
+fn streaming_capability_metadata_is_available_without_streaming_route_selection()
+-> Result<(), CoreError> {
+    let provider = ProviderSummary {
+        provider_id: "openai".to_string(),
+        display_name: "OpenAI".to_string(),
+        capabilities: vec![ProviderCapability {
+            protocol_family: ProtocolFamily::OpenAi,
+            supports_streaming: true,
+            auth_method: AuthMethodCategory::ApiKey,
+            routing_eligible: true,
+        }],
+        accounts: Vec::new(),
+        degraded_reasons: Vec::new(),
+    };
+    let target = RoutingTarget::provider_account("openai", "primary");
+    let policy = policy_with_candidates(vec![target.clone()]);
+    let availability = available_snapshot(vec![target.clone()]);
+
+    let selection = policy.select(&RoutingSelectionRequest::new("gpt-4o"), &availability)?;
+
+    assert!(provider.capabilities[0].supports_streaming);
+    assert_eq!(selection.selected_target, target);
+    assert_eq!(selection.decision_mode, RoutingDecisionMode::Priority);
+
     Ok(())
 }
 
