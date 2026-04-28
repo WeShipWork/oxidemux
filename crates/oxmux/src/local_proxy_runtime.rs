@@ -300,12 +300,13 @@ fn read_request_line(stream: &mut TcpStream) -> Result<String, CoreError> {
     let mut buffer = [0; 512];
 
     while request.len() < MAX_LOCAL_HEALTH_REQUEST_BYTES {
-        let bytes_read =
-            stream
-                .read(&mut buffer)
-                .map_err(|error| CoreError::LocalRuntimeHealthServing {
-                    message: error.to_string(),
-                })?;
+        let remaining_bytes = MAX_LOCAL_HEALTH_REQUEST_BYTES - request.len();
+        let read_limit = remaining_bytes.min(buffer.len());
+        let bytes_read = stream.read(&mut buffer[..read_limit]).map_err(|error| {
+            CoreError::LocalRuntimeHealthServing {
+                message: error.to_string(),
+            }
+        })?;
 
         if bytes_read == 0 {
             break;
@@ -341,4 +342,40 @@ fn write_response(stream: &mut TcpStream, status: &str, body: &str) -> Result<()
         .map_err(|error| CoreError::LocalRuntimeHealthServing {
             message: error.to_string(),
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+    use std::net::{Shutdown, TcpListener, TcpStream};
+    use std::thread;
+
+    use super::{CoreError, MAX_LOCAL_HEALTH_REQUEST_BYTES, read_request_line};
+
+    #[test]
+    fn request_line_reader_enforces_byte_cap() -> Result<(), Box<dyn std::error::Error>> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let socket_addr = listener.local_addr()?;
+        let reader = thread::spawn(move || {
+            let (mut stream, _) =
+                listener
+                    .accept()
+                    .map_err(|error| CoreError::LocalRuntimeHealthServing {
+                        message: error.to_string(),
+                    })?;
+            read_request_line(&mut stream)
+        });
+
+        let mut stream = TcpStream::connect(socket_addr)?;
+        stream.write_all(&vec![b'a'; MAX_LOCAL_HEALTH_REQUEST_BYTES + 512])?;
+        stream.shutdown(Shutdown::Write)?;
+
+        let request_line = match reader.join() {
+            Ok(result) => result?,
+            Err(_) => return Err("request reader thread panicked".into()),
+        };
+
+        assert_eq!(request_line.len(), MAX_LOCAL_HEALTH_REQUEST_BYTES);
+        Ok(())
+    }
 }

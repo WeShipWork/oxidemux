@@ -1,7 +1,7 @@
 # development-workflow Specification
 
 ## Purpose
-TBD - created by archiving change improve-development-workflow. Update Purpose after archive.
+Define the repository development workflow contract for local verification, CI parity, OpenSpec evidence, pull request hygiene, and release-note expectations.
 ## Requirements
 ### Requirement: Mise defines the repository verification contract
 The repository SHALL use mise-defined tasks as the canonical way to run development verification locally and in CI.
@@ -58,4 +58,3 @@ The repository SHALL include lightweight CI validation that catches pull request
 #### Scenario: Non-PR CI does not require PR body metadata
 - **WHEN** CI runs for a push event without pull request metadata
 - **THEN** OpenSpec evidence validation does not fail solely because no PR body exists
-

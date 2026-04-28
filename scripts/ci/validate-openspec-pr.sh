@@ -57,24 +57,23 @@ def changed_files_from_environment():
 def changed_files_from_git():
     if not base_sha or not head_sha:
         return []
-    commands = [
-        ["git", "diff", "--name-only", f"{base_sha}...{head_sha}"],
-        ["git", "diff", "--name-only", base_sha, head_sha],
-    ]
-    for command in commands:
-        try:
-            result = subprocess.run(
-                command,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-        except subprocess.CalledProcessError:
-            continue
-        files = [line.strip() for line in result.stdout.splitlines() if line.strip()]
-        if files:
-            return files
-    return []
+
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", f"{base_sha}...{head_sha}"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", base_sha, head_sha],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
 changed_files = changed_files_from_environment() or changed_files_from_git()
