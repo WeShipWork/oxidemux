@@ -148,14 +148,15 @@ impl MinimalProxyEngine {
     ) -> Result<MinimalProxyResponse, CoreError> {
         request.validate()?;
         let decoded_request = decode_chat_completion_request(&request.body)?;
+        let requested_model = decoded_request.model;
         let canonical_request = CanonicalProtocolRequest::new(
             ProtocolMetadata::open_ai(),
-            decoded_request.model.clone(),
+            requested_model.clone(),
             ProtocolPayload::opaque(MINIMAL_PROXY_JSON_CONTENT_TYPE, request.body),
         )?;
         let selection = RoutingBoundary::select(
             config.routing_policy,
-            &RoutingSelectionRequest::new(decoded_request.model),
+            &RoutingSelectionRequest::new(requested_model.clone()),
             config.availability,
         )?;
         let provider_request = ProviderExecutionRequest::new(
@@ -173,7 +174,7 @@ impl MinimalProxyEngine {
                 });
             }
         };
-        let body = encode_chat_completion_response(&decoded_request.requested_model, response)?;
+        let body = encode_chat_completion_response(&requested_model, response)?;
 
         Ok(MinimalProxyResponse::success(body))
     }
@@ -212,7 +213,6 @@ impl<'a> MinimalProxyEngineConfig<'a> {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct DecodedChatCompletionRequest {
-    requested_model: String,
     model: String,
 }
 
@@ -269,7 +269,6 @@ fn decode_chat_completion_request(body: &[u8]) -> Result<DecodedChatCompletionRe
     }
 
     Ok(DecodedChatCompletionRequest {
-        requested_model: model.to_string(),
         model: model.to_string(),
     })
 }
@@ -278,6 +277,8 @@ fn encode_chat_completion_response(
     requested_model: &str,
     response: &crate::CanonicalProtocolResponse,
 ) -> Result<String, CoreError> {
+    // This smoke route intentionally treats the provider payload as assistant text;
+    // full provider response translation is deferred to the protocol compatibility layer.
     let content = match &response.payload.body {
         ProtocolPayloadBody::Empty => String::new(),
         ProtocolPayloadBody::Opaque(bytes) => {

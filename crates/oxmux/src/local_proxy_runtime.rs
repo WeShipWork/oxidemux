@@ -552,23 +552,33 @@ fn find_header_end(request: &[u8]) -> Option<usize> {
 fn parse_content_length<'a>(
     header_lines: impl Iterator<Item = &'a str>,
 ) -> Result<usize, CoreError> {
-    let mut content_length = 0;
+    let mut content_length = None;
     for line in header_lines {
         let Some((name, value)) = line.split_once(':') else {
             continue;
         };
         if name.eq_ignore_ascii_case("content-length") {
-            content_length = value.trim().parse::<usize>().map_err(|_| {
+            let parsed_content_length = value.trim().parse::<usize>().map_err(|_| {
                 invalid_local_request(
                     "content-length",
                     crate::MinimalProxyErrorCode::UnsupportedRequestShape,
                     "content-length must be a non-negative integer",
                 )
             })?;
+
+            if matches!(content_length, Some(existing) if existing != parsed_content_length) {
+                return Err(invalid_local_request(
+                    "content-length",
+                    crate::MinimalProxyErrorCode::UnsupportedRequestShape,
+                    "duplicate content-length headers must agree",
+                ));
+            }
+
+            content_length = Some(parsed_content_length);
         }
     }
 
-    Ok(content_length)
+    Ok(content_length.unwrap_or(0))
 }
 
 fn invalid_local_request(

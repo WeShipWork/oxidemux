@@ -150,6 +150,32 @@ fn malformed_chat_request_returns_400_and_runtime_keeps_serving()
 }
 
 #[test]
+fn conflicting_content_length_returns_400_and_runtime_keeps_serving()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut runtime = LocalHealthRuntime::start_with_proxy_route(
+        LocalHealthRuntimeConfig::loopback(0),
+        proxy_route_config()?,
+    )?;
+    let socket_addr = runtime.bound_endpoint().socket_addr;
+    let response = raw_request(
+        socket_addr,
+        "POST /v1/chat/completions HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: 2\r\nContent-Length: 64\r\n\r\n{}",
+    )?;
+
+    assert!(
+        response.starts_with("HTTP/1.1 400 Bad Request\r\n"),
+        "unexpected response: {response:?}"
+    );
+    assert!(response.contains(r#""code":"unsupported_request_shape""#));
+
+    let health_response = request(socket_addr, "/health")?;
+    assert!(health_response.starts_with("HTTP/1.1 200 OK\r\n"));
+
+    runtime.shutdown()?;
+    Ok(())
+}
+
+#[test]
 fn unsupported_method_and_path_return_json_404() -> Result<(), Box<dyn std::error::Error>> {
     let mut runtime = LocalHealthRuntime::start_with_proxy_route(
         LocalHealthRuntimeConfig::loopback(0),
@@ -283,20 +309,14 @@ fn client_io_failure_does_not_stop_health_runtime() -> Result<(), Box<dyn std::e
 }
 
 fn post_chat_completion(socket_addr: SocketAddr, body: &str) -> std::io::Result<String> {
-    let mut stream = TcpStream::connect(socket_addr)?;
-    stream.set_read_timeout(Some(Duration::from_secs(1)))?;
-    stream.write_all(
-        format!(
+    raw_request(
+        socket_addr,
+        &format!(
             "POST /v1/chat/completions HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-            body.len(), body
-        )
-        .as_bytes(),
-    )?;
-    stream.shutdown(Shutdown::Write)?;
-
-    let mut response = String::new();
-    stream.read_to_string(&mut response)?;
-    Ok(response)
+            body.len(),
+            body
+        ),
+    )
 }
 
 fn proxy_route_config() -> Result<LocalProxyRouteConfig, CoreError> {
@@ -329,13 +349,29 @@ fn proxy_route_config() -> Result<LocalProxyRouteConfig, CoreError> {
     ))
 }
 
-fn request(socket_addr: SocketAddr, path: &str) -> std::io::Result<String> {
+fn raw_request(socket_addr: SocketAddr, request: &str) -> std::io::Result<String> {
     let mut stream = TcpStream::connect(socket_addr)?;
     stream.set_read_timeout(Some(Duration::from_secs(1)))?;
-    stream.write_all(format!("GET {path} HTTP/1.1\r\nHost: localhost\r\n\r\n").as_bytes())?;
-    stream.shutdown(Shutdown::Write)?;
+    stream.write_all(request.as_bytes())?;
+    read_response(stream)
+}
 
+fn request(socket_addr: SocketAddr, path: &str) -> std::io::Result<String> {
+    raw_request(
+        socket_addr,
+        &format!("GET {path} HTTP/1.1\r\nHost: localhost\r\n\r\n"),
+    )
+}
+
+fn read_response(mut stream: TcpStream) -> std::io::Result<String> {
     let mut response = String::new();
-    stream.read_to_string(&mut response)?;
-    Ok(response)
+    match stream.read_to_string(&mut response) {
+        Ok(_) => Ok(response),
+        Err(error)
+            if error.kind() == std::io::ErrorKind::ConnectionReset && !response.is_empty() =>
+        {
+            Ok(response)
+        }
+        Err(error) => Err(error),
+    }
 }
