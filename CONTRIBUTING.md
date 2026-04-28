@@ -38,6 +38,8 @@ Create or update OpenSpec artifacts before implementing changes that affect:
 - Public Rust APIs.
 - Workflow policy.
 - Provider or protocol semantics.
+- Subscription UX, provider auth/session semantics, model aliases, request
+  rewrite behavior, or reasoning/thinking compatibility.
 - GPUI behavior.
 - Cross-crate boundaries.
 
@@ -48,6 +50,10 @@ OpenSpec path in the pull request.
 No OpenSpec artifact is required for docs-only, typo-only, formatting-only,
 dependency-free housekeeping, or clearly non-behavioral changes. In those cases,
 add a short no-spec-required justification in the pull request template.
+
+Use `docs/vision.md` and `docs/architecture.md` as the durable product-intent
+guardrails. Changes that move behavior between `oxmux` and `oxidemux` must
+explain how they preserve the shared core versus platform shell boundary.
 
 ## Pull request hygiene
 

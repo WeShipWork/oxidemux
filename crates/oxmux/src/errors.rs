@@ -1,6 +1,8 @@
 use core::fmt;
 
-use crate::{ProtocolFamily, ProtocolTranslationDirection, ProviderExecutionFailure};
+use crate::{
+    ProtocolFamily, ProtocolTranslationDirection, ProviderExecutionFailure, RoutingFailure,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CoreError {
@@ -51,6 +53,9 @@ pub enum CoreError {
         source_family: ProtocolFamily,
         target_family: ProtocolFamily,
         message: String,
+    },
+    Routing {
+        failure: RoutingFailure,
     },
 }
 
@@ -119,6 +124,9 @@ impl fmt::Display for CoreError {
                 formatter,
                 "protocol {direction:?} translation from {source_family:?} to {target_family:?} is deferred: {message}"
             ),
+            Self::Routing { failure } => {
+                write!(formatter, "routing failed: {}", failure.message())
+            }
         }
     }
 }

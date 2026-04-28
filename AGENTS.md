@@ -1,5 +1,15 @@
 # Rust coding guidelines
 
+# Product intent for agents
+
+* Preserve the core vision: OxideMux exists to provide subscription-aware local AI proxying with first-class Linux, macOS, and Windows support because VibeProxy and zero-limit validate the product shape but do not cover the full cross-platform need.
+* Treat subscription UX as the product center, not an add-on. Account health, auth state, quota pressure, provider availability, routing choices, fallback reasons, and recovery actions should remain visible to users and testable in core state.
+* Do not reduce VibeProxy, zero-limit, or CLIProxyAPI to vague inspiration. Treat them as validated product references: CLIProxyAPI for headless proxy/API boundaries, zero-limit for desktop lifecycle/quota UX, and VibeProxy for subscription-first local proxy auth, alias, routing, and thinking/reasoning rewrite behavior.
+* `oxmux` owns shared, headless semantics: protocol compatibility, request rewriting, model aliases, reasoning/thinking primitives, subscription-aware routing, provider/account state, usage/quota summaries, management snapshots, and structured errors.
+* `oxidemux` owns platform shell implementation: GPUI views, tray/menu integration, desktop lifecycle, notifications, packaging, updater UX, platform credential storage adapters, and OS-specific auth presentation.
+* If behavior must work in CLI/headless tests, put the semantics in `oxmux`. If behavior exists only because a desktop OS, GPUI, tray/menu, packaging, updater, or platform secret store exists, put it in `oxidemux` or an app-owned adapter.
+* Before changing subscription UX, auth/session behavior, request rewrite, thinking/reasoning compatibility, routing, provider selection, or crate boundaries, update or reference OpenSpec. See `docs/vision.md`, `docs/architecture.md`, `openspec/specs/oxmux-core/spec.md`, and `openspec/specs/oxidemux-app-shell/spec.md`.
+
 * Prioritize code correctness and clarity. Speed and efficiency are secondary priorities unless otherwise specified.
 * Do not write organizational or comments that summarize the code. Comments should only be written in order to explain "why" the code is written in some way in the case there is a reason that is tricky / non-obvious.
 * Prefer implementing functionality in existing files unless it is a new logical component. Avoid creating many small files.

@@ -3,6 +3,12 @@
 Define the `oxidemux` app shell boundary as the desktop and integration consumer
 of the reusable `oxmux` core crate.
 
+`oxidemux` exists to make the shared subscription proxy understandable and
+controllable through native Linux, macOS, and Windows surfaces. The shell owns
+presentation, platform lifecycle, and OS integration; it consumes core state and
+supplies platform inputs without duplicating `oxmux` routing, request rewrite,
+thinking/reasoning, provider, quota, or protocol decisions.
+
 ## Requirements
 
 ### Requirement: App shell consumes core crate
@@ -30,6 +36,17 @@ The `oxidemux` crate SHALL be the owner of future GPUI UI, settings UX, dashboar
 #### Scenario: Credential storage boundary remains explicit
 - **WHEN** future secure credential storage work is planned
 - **THEN** platform-specific storage implementations belong to `oxidemux` or app/platform adapters while reusable credential abstractions belong to `oxmux`
+
+### Requirement: App shell owns cross-platform subscription UX
+The `oxidemux` app shell SHALL provide platform-appropriate Linux, macOS, and Windows tray/menu and window surfaces for subscription onboarding, auth repair, account selection, quota/rate-limit visibility, provider availability, selected-route explanation, fallback visibility, and proxy lifecycle control while delegating shared proxy semantics to `oxmux`.
+
+#### Scenario: Tray and menu behavior remains cross-platform
+- **WHEN** future tray/menu or menu-bar behavior is designed for one desktop platform
+- **THEN** the app-shell design identifies equivalent Linux, macOS, and Windows affordances or documents a platform limitation without moving shared proxy logic out of `oxmux`
+
+#### Scenario: Subscription dashboard consumes core state
+- **WHEN** future GPUI dashboard work displays auth health, quota pressure, provider status, selected route, fallback reason, or recovery guidance
+- **THEN** it renders data from `oxmux` management, routing, provider/account, usage/quota, and error contracts instead of reimplementing the decisions in app-only state
 
 ### Requirement: App shell separates UI-visible state from core behavior
 The `oxidemux` crate SHALL adapt core state into user-visible UI or integration state without duplicating core routing, provider, quota, or protocol logic.
