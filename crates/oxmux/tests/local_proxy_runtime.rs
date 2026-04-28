@@ -57,6 +57,23 @@ fn health_endpoint_returns_stable_success_response() -> Result<(), Box<dyn std::
 }
 
 #[test]
+fn health_endpoint_accepts_fragmented_request_line() -> Result<(), Box<dyn std::error::Error>> {
+    let mut runtime = LocalHealthRuntime::start(LocalHealthRuntimeConfig::loopback(0))?;
+    let mut stream = TcpStream::connect(runtime.bound_endpoint().socket_addr)?;
+    stream.set_read_timeout(Some(Duration::from_secs(1)))?;
+    stream.write_all(b"GET /hea")?;
+    stream.write_all(b"lth HTTP/1.1\r\nHost: localhost\r\n\r\n")?;
+
+    let mut response = String::new();
+    stream.read_to_string(&mut response)?;
+
+    assert!(response.starts_with("HTTP/1.1 200 OK\r\n"));
+
+    runtime.shutdown()?;
+    Ok(())
+}
+
+#[test]
 fn unsupported_paths_return_deterministic_non_health_response()
 -> Result<(), Box<dyn std::error::Error>> {
     let mut runtime = LocalHealthRuntime::start(LocalHealthRuntimeConfig::loopback(0))?;

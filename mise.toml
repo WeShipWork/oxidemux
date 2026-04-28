@@ -1,10 +1,13 @@
 [tools]
-rust = "1.95.0"
+rust = { version = "1.95.0", profile = "default", components = "rustfmt,clippy" }
 hk = "1.36.0"
 pkl = "latest"
-typos = "latest"
+typos = "1.45.2"
 gitleaks = "latest"
 rumdl = "latest"
+
+[tasks.rust-components]
+run = "rustup component add rustfmt clippy --toolchain 1.95.0"
 
 [tasks.fmt]
 run = "cargo fmt --all -- --check"
@@ -24,8 +27,20 @@ run = "cargo test --all-targets --all-features"
 [tasks.hk-check]
 run = "hk check --all"
 
+[tasks.hk-install]
+run = "hk install"
+
 [tasks.hk-pre-commit]
 run = "hk run pre-commit"
 
+[tasks.openspec-validate]
+run = "scripts/ci/validate-openspec-pr.sh"
+
 [tasks.ci]
-depends = ["fmt", "check", "clippy", "test"]
+run = [
+    "mise run rust-components",
+    "mise run fmt",
+    "mise run check",
+    "mise run clippy",
+    "mise run test",
+]

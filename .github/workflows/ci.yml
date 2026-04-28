@@ -2,6 +2,8 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 permissions:
@@ -15,26 +17,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
-      - name: Set up Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          cache: false
-          components: rustfmt, clippy
-          rustflags: ""
-          toolchain: 1.95.0
+          fetch-depth: 0
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      - name: Set up mise
+        uses: jdx/mise-action@v3
+        with:
+          install: true
+          cache: true
+          experimental: true
 
-      - name: Run Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Run repository verification
+        run: mise run ci
 
-      - name: Check all targets
-        run: cargo check --all-targets --all-features
+      - name: Run hk checks
+        run: mise run hk-check
 
-      - name: Test all targets
-        run: cargo test --all-targets --all-features
+      - name: Validate OpenSpec PR evidence
+        if: github.event_name == 'pull_request'
+        run: mise run openspec-validate
 
   cross-platform-check:
     name: Cross-platform check (${{ matrix.runner }})
@@ -51,22 +52,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Set up Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Set up mise
+        uses: jdx/mise-action@v3
         with:
-          cache: false
-          components: rustfmt, clippy
-          rustflags: ""
-          toolchain: 1.95.0
+          install: true
+          cache: true
+          experimental: true
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-      - name: Run Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - name: Check all targets
-        run: cargo check --all-targets --all-features
-
-      - name: Test all targets
-        run: cargo test --all-targets --all-features
+      - name: Run repository verification
+        run: mise run ci

@@ -25,7 +25,7 @@ rules:
     - Include scenarios for provider auth, token refresh, streaming, proxy startup, and degraded service
   tasks:
     - Keep tasks independently verifiable
-    - Include cargo fmt, clippy, check, and test verification for Rust changes
+    - Include `mise run ci` verification for Rust changes
     - Add or update tests for behavior changes
   design:
     - Treat oxidemux as a consumer of oxmux, not the owner of core proxy behavior
