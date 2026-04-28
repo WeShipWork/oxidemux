@@ -1,8 +1,8 @@
 use core::fmt;
 
 use crate::{
-    ProtocolFamily, ProtocolTranslationDirection, ProviderExecutionFailure, RoutingFailure,
-    StreamingFailure,
+    MinimalProxyErrorCode, ProtocolFamily, ProtocolTranslationDirection, ProviderExecutionFailure,
+    RoutingFailure, StreamingFailure,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -60,6 +60,17 @@ pub enum CoreError {
     },
     Streaming {
         failure: StreamingFailure,
+    },
+    MinimalProxyRequestValidation {
+        field: &'static str,
+        code: MinimalProxyErrorCode,
+        message: String,
+    },
+    MinimalProxyUnsupportedResponseMode {
+        message: String,
+    },
+    MinimalProxyResponseSerialization {
+        message: String,
     },
 }
 
@@ -133,6 +144,24 @@ impl fmt::Display for CoreError {
             }
             Self::Streaming { failure } => {
                 write!(formatter, "streaming failed: {}", failure.message())
+            }
+            Self::MinimalProxyRequestValidation { field, message, .. } => {
+                write!(
+                    formatter,
+                    "minimal proxy request field {field} is invalid: {message}"
+                )
+            }
+            Self::MinimalProxyUnsupportedResponseMode { message } => {
+                write!(
+                    formatter,
+                    "minimal proxy response mode is unsupported: {message}"
+                )
+            }
+            Self::MinimalProxyResponseSerialization { message } => {
+                write!(
+                    formatter,
+                    "minimal proxy response serialization failed: {message}"
+                )
             }
         }
     }
