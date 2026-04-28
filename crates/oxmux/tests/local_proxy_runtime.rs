@@ -45,7 +45,10 @@ fn health_endpoint_returns_stable_success_response() -> Result<(), Box<dyn std::
     let mut runtime = LocalHealthRuntime::start(LocalHealthRuntimeConfig::loopback(0))?;
     let response = request(runtime.bound_endpoint().socket_addr, "/health")?;
 
-    assert!(response.starts_with("HTTP/1.1 200 OK\r\n"));
+    assert!(
+        response.starts_with("HTTP/1.1 200 OK\r\n"),
+        "unexpected response: {response:?}"
+    );
     assert!(response.contains(&format!(
         "Content-Length: {}\r\n",
         LOCAL_HEALTH_RESPONSE_BODY.len()
@@ -83,7 +86,10 @@ fn unsupported_paths_return_deterministic_non_health_response()
     let mut runtime = LocalHealthRuntime::start(LocalHealthRuntimeConfig::loopback(0))?;
     let response = request(runtime.bound_endpoint().socket_addr, "/missing")?;
 
-    assert!(response.starts_with("HTTP/1.1 404 Not Found\r\n"));
+    assert!(
+        response.starts_with("HTTP/1.1 404 Not Found\r\n"),
+        "unexpected response: {response:?}"
+    );
     assert!(!response.contains(LOCAL_HEALTH_RESPONSE_BODY));
 
     runtime.shutdown()?;
@@ -190,7 +196,10 @@ fn client_io_failure_does_not_stop_health_runtime() -> Result<(), Box<dyn std::e
     drop(idle_stream);
 
     let response = request(socket_addr, "/health")?;
-    assert!(response.starts_with("HTTP/1.1 200 OK\r\n"));
+    assert!(
+        response.starts_with("HTTP/1.1 200 OK\r\n"),
+        "unexpected response: {response:?}"
+    );
     assert!(matches!(
         runtime.status().lifecycle,
         ProxyLifecycleState::Running { .. }
@@ -204,6 +213,7 @@ fn request(socket_addr: SocketAddr, path: &str) -> std::io::Result<String> {
     let mut stream = TcpStream::connect(socket_addr)?;
     stream.set_read_timeout(Some(Duration::from_secs(1)))?;
     stream.write_all(format!("GET {path} HTTP/1.1\r\nHost: localhost\r\n\r\n").as_bytes())?;
+    stream.shutdown(Shutdown::Write)?;
 
     let mut response = String::new();
     stream.read_to_string(&mut response)?;
