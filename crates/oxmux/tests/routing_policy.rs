@@ -97,6 +97,53 @@ fn fallback_disabled_returns_structured_failure() {
 }
 
 #[test]
+fn fallback_disabled_degraded_candidate_reports_disallowed_reason() {
+    let degraded = RoutingTarget::provider_account("openai", "primary");
+    let policy = policy_with_candidates(vec![degraded.clone()]);
+    let availability = RoutingAvailabilitySnapshot::new(vec![RoutingTargetAvailability::new(
+        degraded.clone(),
+        RoutingAvailabilityState::Degraded {
+            reason: "latency high".to_string(),
+        },
+    )]);
+    let request = RoutingSelectionRequest::new("gpt-4o").with_fallback_enabled(false);
+
+    let error = policy.select(&request, &availability);
+
+    assert!(matches!(
+        error,
+        Err(CoreError::Routing {
+            failure: RoutingFailure::FallbackDisabled { target, reason }
+        }) if target == degraded && matches!(reason, RoutingSkipReason::DegradedDisallowed { .. })
+    ));
+}
+
+#[test]
+fn fallback_disabled_selects_degraded_candidate_when_allowed() -> Result<(), CoreError> {
+    let degraded = RoutingTarget::provider_account("openai", "primary");
+    let policy = policy_with_candidates(vec![degraded.clone()]);
+    let availability = RoutingAvailabilitySnapshot::new(vec![RoutingTargetAvailability::new(
+        degraded.clone(),
+        RoutingAvailabilityState::Degraded {
+            reason: "latency high".to_string(),
+        },
+    )]);
+    let request = RoutingSelectionRequest::new("gpt-4o")
+        .with_fallback_enabled(false)
+        .with_degraded_allowed(true);
+
+    let selection = policy.select(&request, &availability)?;
+
+    assert_eq!(selection.selected_target, degraded);
+    assert!(matches!(
+        selection.selected_state,
+        RoutingAvailabilityState::Degraded { .. }
+    ));
+    assert!(selection.skipped_candidates.is_empty());
+    Ok(())
+}
+
+#[test]
 fn explicit_account_target_wins_over_priority_candidates() -> Result<(), CoreError> {
     let primary = RoutingTarget::provider_account("openai", "primary");
     let explicit = RoutingTarget::provider_account("anthropic", "team");
@@ -156,6 +203,38 @@ fn exhausted_candidates_fail_structurally() {
         Err(CoreError::Routing {
             failure: RoutingFailure::ExhaustedCandidates { skipped, .. }
         }) if skipped.len() == 2
+    ));
+}
+
+#[test]
+fn mixed_exhausted_and_degraded_candidates_are_not_degraded_only() {
+    let exhausted = RoutingTarget::provider_account("openai", "primary");
+    let degraded = RoutingTarget::provider_account("anthropic", "fallback");
+    let policy = policy_with_candidates(vec![exhausted.clone(), degraded.clone()]);
+    let availability = RoutingAvailabilitySnapshot::new(vec![
+        RoutingTargetAvailability::new(
+            exhausted,
+            RoutingAvailabilityState::Exhausted {
+                reason: "daily quota".to_string(),
+            },
+        ),
+        RoutingTargetAvailability::new(
+            degraded,
+            RoutingAvailabilityState::Degraded {
+                reason: "stale quota".to_string(),
+            },
+        ),
+    ]);
+
+    let error = policy.select(&RoutingSelectionRequest::new("gpt-4o"), &availability);
+
+    assert!(matches!(
+        error,
+        Err(CoreError::Routing {
+            failure: RoutingFailure::NoAvailableCandidates { skipped, .. }
+        }) if skipped.len() == 2
+            && matches!(skipped[0].reason, RoutingSkipReason::Exhausted { .. })
+            && matches!(skipped[1].reason, RoutingSkipReason::DegradedDisallowed { .. })
     ));
 }
 
@@ -253,6 +332,46 @@ fn invalid_policy_returns_structured_core_error() {
         Err(CoreError::Routing {
             failure: RoutingFailure::InvalidPolicy {
                 field: "routes.resolved_model",
+                ..
+            }
+        })
+    ));
+}
+
+#[test]
+fn invalid_request_returns_structured_request_error() {
+    let target = RoutingTarget::provider_account("openai", "primary");
+    let policy = policy_with_candidates(vec![target.clone()]);
+    let availability = available_snapshot(vec![target]);
+
+    let error = policy.select(&RoutingSelectionRequest::new(" "), &availability);
+
+    assert!(matches!(
+        error,
+        Err(CoreError::Routing {
+            failure: RoutingFailure::InvalidRequest {
+                field: "requested_model",
+                ..
+            }
+        })
+    ));
+}
+
+#[test]
+fn invalid_explicit_target_returns_structured_request_error() {
+    let target = RoutingTarget::provider_account("openai", "primary");
+    let policy = policy_with_candidates(vec![target.clone()]);
+    let availability = available_snapshot(vec![target]);
+    let request = RoutingSelectionRequest::new("gpt-4o")
+        .with_explicit_target(RoutingTarget::provider_account(" ", "primary"));
+
+    let error = policy.select(&request, &availability);
+
+    assert!(matches!(
+        error,
+        Err(CoreError::Routing {
+            failure: RoutingFailure::InvalidRequest {
+                field: "explicit_target",
                 ..
             }
         })

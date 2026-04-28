@@ -334,6 +334,16 @@ impl RoutingTarget {
 
         Ok(())
     }
+
+    fn validate_request(&self, field: &'static str) -> Result<(), CoreError> {
+        validate_required_request_text(field, &self.provider_id)?;
+
+        if let Some(account_id) = &self.account_id {
+            validate_required_request_text(field, account_id)?;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -474,10 +484,10 @@ impl RoutingSelectionRequest {
     }
 
     fn validate(&self) -> Result<(), CoreError> {
-        validate_required_text("requested_model", &self.requested_model)?;
+        validate_required_request_text("requested_model", &self.requested_model)?;
 
         if let Some(target) = &self.explicit_target {
-            target.validate("explicit_target")?;
+            target.validate_request("explicit_target")?;
         }
 
         Ok(())
@@ -663,13 +673,36 @@ fn evaluate_candidates(
                 ));
             }
             Some(RoutingAvailabilityState::Degraded { reason }) => {
+                if allow_degraded && !fallback_enabled {
+                    return Ok(selection(
+                        requested_model,
+                        resolved_model,
+                        target,
+                        &RoutingAvailabilityState::Degraded {
+                            reason: reason.clone(),
+                        },
+                        decision_mode,
+                        skipped,
+                    ));
+                }
+
                 let skipped_candidate = SkippedRoutingCandidate {
                     target: target.clone(),
-                    reason: RoutingSkipReason::DegradedDeferred {
-                        reason: reason.clone(),
+                    reason: if allow_degraded {
+                        RoutingSkipReason::DegradedDeferred {
+                            reason: reason.clone(),
+                        }
+                    } else {
+                        RoutingSkipReason::DegradedDisallowed {
+                            reason: reason.clone(),
+                        }
                     },
                 };
-                deferred_degraded.push((target.clone(), reason.clone(), decision_mode));
+
+                if allow_degraded {
+                    deferred_degraded.push((target.clone(), reason.clone(), decision_mode));
+                }
+
                 skipped_candidate
             }
             Some(RoutingAvailabilityState::Unavailable { reason }) => SkippedRoutingCandidate {
@@ -715,7 +748,7 @@ fn evaluate_candidates(
         ));
     }
 
-    if skipped.iter().any(|candidate| {
+    if skipped.iter().all(|candidate| {
         matches!(
             candidate.reason,
             RoutingSkipReason::DegradedDeferred { .. }
@@ -777,6 +810,20 @@ fn validate_required_text(field: &'static str, value: &str) -> Result<(), CoreEr
     }
 
     Ok(())
+}
+
+fn validate_required_request_text(field: &'static str, value: &str) -> Result<(), CoreError> {
+    if value.trim().is_empty() {
+        return Err(invalid_request(field, format!("{field} must not be empty")));
+    }
+
+    Ok(())
+}
+
+fn invalid_request(field: &'static str, message: String) -> CoreError {
+    CoreError::Routing {
+        failure: RoutingFailure::InvalidRequest { field, message },
+    }
 }
 
 fn invalid_policy(field: &'static str, message: String) -> CoreError {
