@@ -688,7 +688,17 @@ mod tests {
 
         let mut stream = TcpStream::connect(socket_addr)?;
         match stream.write_all(&vec![b'a'; MAX_LOCAL_HEALTH_REQUEST_BYTES + 512]) {
-            Ok(()) => stream.shutdown(Shutdown::Write)?,
+            Ok(()) => match stream.shutdown(Shutdown::Write) {
+                Ok(()) => {}
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        ErrorKind::BrokenPipe
+                            | ErrorKind::ConnectionReset
+                            | ErrorKind::NotConnected
+                    ) => {}
+                Err(error) => return Err(error.into()),
+            },
             Err(error)
                 if matches!(
                     error.kind(),
