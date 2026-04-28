@@ -266,6 +266,42 @@ fn degraded_candidate_is_selected_only_when_allowed() -> Result<(), CoreError> {
         allowed.selected_state,
         RoutingAvailabilityState::Degraded { .. }
     ));
+    assert!(allowed.skipped_candidates.is_empty());
+    Ok(())
+}
+
+#[test]
+fn selected_degraded_fallback_is_not_reported_as_skipped() -> Result<(), CoreError> {
+    let first_degraded = RoutingTarget::provider_account("openai", "primary");
+    let second_degraded = RoutingTarget::provider_account("anthropic", "fallback");
+    let policy = policy_with_candidates(vec![first_degraded.clone(), second_degraded.clone()]);
+    let availability = RoutingAvailabilitySnapshot::new(vec![
+        RoutingTargetAvailability::new(
+            first_degraded.clone(),
+            RoutingAvailabilityState::Degraded {
+                reason: "latency high".to_string(),
+            },
+        ),
+        RoutingTargetAvailability::new(
+            second_degraded,
+            RoutingAvailabilityState::Degraded {
+                reason: "quota stale".to_string(),
+            },
+        ),
+    ]);
+
+    let selection = policy.select(
+        &RoutingSelectionRequest::new("gpt-4o").with_degraded_allowed(true),
+        &availability,
+    )?;
+
+    assert_eq!(selection.selected_target, first_degraded);
+    assert!(
+        !selection
+            .skipped_candidates
+            .iter()
+            .any(|candidate| candidate.target == selection.selected_target)
+    );
     Ok(())
 }
 

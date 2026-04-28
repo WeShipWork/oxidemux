@@ -736,6 +736,11 @@ fn evaluate_candidates(
     }
 
     if allow_degraded && let Some((target, reason, decision_mode)) = deferred_degraded.first() {
+        let skipped = skipped
+            .into_iter()
+            .filter(|candidate| candidate.target != *target)
+            .collect();
+
         return Ok(selection(
             requested_model,
             resolved_model,
