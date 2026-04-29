@@ -1,25 +1,38 @@
+//! Minimal local proxy smoke-route contracts.
+//!
+//! This module validates a small OpenAI-compatible chat-completions request shape,
+//! routes it through core policy and provider execution, and serializes basic JSON
+//! responses for local runtime tests and bootstrap behavior.
+
 use crate::{
     CanonicalProtocolRequest, CoreError, ProtocolMetadata, ProtocolPayload, ProtocolPayloadBody,
     ProviderExecutionRequest, ProviderExecutor, ResponseMode, RoutingAvailabilitySnapshot,
     RoutingBoundary, RoutingPolicy, RoutingSelectionRequest,
 };
 
+/// M i n i m a l c h a t c o m p l e t i o n s p a t h used by this public contract.
 pub const MINIMAL_CHAT_COMPLETIONS_PATH: &str = "/v1/chat/completions";
+/// M i n i m a l p r o x y j s o n c o n t e n t t y p e used by this public contract.
 pub const MINIMAL_PROXY_JSON_CONTENT_TYPE: &str = "application/json";
+/// M a x m i n i m a l p r o x y b o d y b y t e s used by this public contract.
 pub const MAX_MINIMAL_PROXY_BODY_BYTES: usize = 64 * 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Validated request body for the minimal local chat-completions route.
 pub struct MinimalProxyRequest {
+    /// Opaque body bytes or serialized response body.
     pub body: Vec<u8>,
 }
 
 impl MinimalProxyRequest {
+    /// Creates a minimal OpenAI chat-completions request body.
     pub fn open_ai_chat_completions(body: impl Into<Vec<u8>>) -> Result<Self, CoreError> {
         let request = Self { body: body.into() };
         request.validate()?;
         Ok(request)
     }
 
+    /// Validates this value and returns a structured core error on failure.
     pub fn validate(&self) -> Result<(), CoreError> {
         if self.body.len() > MAX_MINIMAL_PROXY_BODY_BYTES {
             return Err(invalid_request(
@@ -34,13 +47,18 @@ impl MinimalProxyRequest {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// HTTP-style response emitted by the minimal proxy engine.
 pub struct MinimalProxyResponse {
+    /// HTTP status code returned to the local client.
     pub status_code: u16,
+    /// Optional MIME-like content type for the payload.
     pub content_type: &'static str,
+    /// Opaque body bytes or serialized response body.
     pub body: String,
 }
 
 impl MinimalProxyResponse {
+    /// Creates a successful response value.
     pub fn success(body: String) -> Self {
         Self {
             status_code: 200,
@@ -49,14 +67,17 @@ impl MinimalProxyResponse {
         }
     }
 
+    /// Creates a minimal proxy response for a client request error.
     pub fn invalid_request(error: &CoreError) -> Self {
         Self::error(400, MinimalProxyErrorCode::from_core_error(error), error)
     }
 
+    /// Creates a minimal proxy response for an upstream core failure.
     pub fn proxy_failure(error: &CoreError) -> Self {
         Self::error(502, MinimalProxyErrorCode::from_core_error(error), error)
     }
 
+    /// Creates a minimal proxy response for unsupported local paths.
     pub fn unsupported_path() -> Self {
         Self::error_body(
             404,
@@ -65,6 +86,7 @@ impl MinimalProxyResponse {
         )
     }
 
+    /// Maps a core error into a minimal proxy response.
     pub fn from_core_error(error: &CoreError) -> Self {
         match error {
             CoreError::MinimalProxyRequestValidation { .. } => Self::invalid_request(error),
@@ -95,20 +117,32 @@ impl MinimalProxyResponse {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Stable error code serialized by minimal proxy responses.
 pub enum MinimalProxyErrorCode {
+    /// Request body was not valid JSON.
     InvalidJson,
+    /// Request body omitted the model field.
     MissingModel,
+    /// Request model was blank.
     BlankModel,
+    /// Request shape is outside the minimal route contract.
     UnsupportedRequestShape,
+    /// Request body exceeded the minimal proxy size limit.
     RequestTooLarge,
+    /// Routing selection failed.
     RoutingFailed,
+    /// Provider execution failed.
     ProviderExecutionFailed,
+    /// Provider response mode cannot be serialized by this route.
     UnsupportedResponseMode,
+    /// Minimal proxy response serialization failed.
     ResponseSerializationFailed,
+    /// Local request path is not supported by the minimal runtime.
     UnsupportedPath,
 }
 
 impl MinimalProxyErrorCode {
+    /// Returns the stable serialized error code string.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::InvalidJson => "invalid_json",
@@ -139,9 +173,11 @@ impl MinimalProxyErrorCode {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Synchronous engine for the minimal local chat-completions smoke route.
 pub struct MinimalProxyEngine;
 
 impl MinimalProxyEngine {
+    /// Executes this boundary operation and returns structured core errors on failure.
     pub fn execute(
         request: MinimalProxyRequest,
         config: MinimalProxyEngineConfig<'_>,
@@ -179,6 +215,7 @@ impl MinimalProxyEngine {
         Ok(MinimalProxyResponse::success(body))
     }
 
+    /// Executes a minimal proxy request and maps failures into proxy responses.
     pub fn execute_to_response(
         request: MinimalProxyRequest,
         config: MinimalProxyEngineConfig<'_>,
@@ -191,13 +228,18 @@ impl MinimalProxyEngine {
 }
 
 #[derive(Clone, Copy)]
+/// Borrowed routing, availability, and provider executor inputs for minimal proxy execution.
 pub struct MinimalProxyEngineConfig<'a> {
+    /// Routing policy used by the minimal proxy route.
     pub routing_policy: &'a RoutingPolicy,
+    /// Target availability used by the minimal proxy route.
     pub availability: &'a RoutingAvailabilitySnapshot,
+    /// Provider executor used by the minimal proxy route.
     pub provider_executor: &'a dyn ProviderExecutor,
 }
 
 impl<'a> MinimalProxyEngineConfig<'a> {
+    /// Creates a validated value for this public contract.
     pub fn new(
         routing_policy: &'a RoutingPolicy,
         availability: &'a RoutingAvailabilitySnapshot,
