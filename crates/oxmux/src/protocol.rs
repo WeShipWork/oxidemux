@@ -1,9 +1,17 @@
+//! Protocol compatibility and translation boundary contracts.
+//!
+//! Protocol values carry canonical request/response metadata and opaque payloads
+//! while current translation functions validate inputs and return deferred
+//! outcomes instead of promising provider-specific conversion behavior.
+
 use crate::{CoreError, ProtocolFamily};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Facade for protocol request and response translation boundaries.
 pub struct ProtocolBoundary;
 
 impl ProtocolBoundary {
+    /// Validates and translates, or defers translation of, a canonical request.
     pub fn translate_request(
         request: CanonicalProtocolRequest,
         target_protocol: ProtocolMetadata,
@@ -18,6 +26,7 @@ impl ProtocolBoundary {
         ))
     }
 
+    /// Validates and translates, or defers translation of, a canonical response.
     pub fn translate_response(
         response: CanonicalProtocolResponse,
         target_protocol: ProtocolMetadata,
@@ -33,13 +42,16 @@ impl ProtocolBoundary {
     }
 }
 
+/// Trait for protocol translation implementations.
 pub trait ProtocolTranslator {
+    /// Validates and translates, or defers translation of, a canonical request.
     fn translate_request(
         &self,
         request: CanonicalProtocolRequest,
         target_protocol: ProtocolMetadata,
     ) -> Result<ProtocolTranslationOutcome<CanonicalProtocolRequest>, CoreError>;
 
+    /// Validates and translates, or defers translation of, a canonical response.
     fn translate_response(
         &self,
         response: CanonicalProtocolResponse,
@@ -66,13 +78,18 @@ impl ProtocolTranslator for ProtocolBoundary {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Protocol-family-tagged request payload used by core routing and providers.
 pub struct CanonicalProtocolRequest {
+    /// Protocol metadata attached to this payload.
     pub protocol: ProtocolMetadata,
+    /// Model associated with this protocol request or route.
     pub model: String,
+    /// Opaque protocol payload for this request, response, or stream event.
     pub payload: ProtocolPayload,
 }
 
 impl CanonicalProtocolRequest {
+    /// Creates a validated value for this public contract.
     pub fn new(
         protocol: ProtocolMetadata,
         model: impl Into<String>,
@@ -87,6 +104,7 @@ impl CanonicalProtocolRequest {
         Ok(request)
     }
 
+    /// Validates this value and returns a structured core error on failure.
     pub fn validate(&self) -> Result<(), CoreError> {
         self.protocol.validate()?;
         validate_required_text("model", &self.model)?;
@@ -95,13 +113,18 @@ impl CanonicalProtocolRequest {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Protocol-family-tagged response payload returned by providers.
 pub struct CanonicalProtocolResponse {
+    /// Protocol metadata attached to this payload.
     pub protocol: ProtocolMetadata,
+    /// Response status associated with the canonical response.
     pub status: ProtocolResponseStatus,
+    /// Opaque protocol payload for this request, response, or stream event.
     pub payload: ProtocolPayload,
 }
 
 impl CanonicalProtocolResponse {
+    /// Creates a validated value for this public contract.
     pub fn new(
         protocol: ProtocolMetadata,
         status: ProtocolResponseStatus,
@@ -116,6 +139,7 @@ impl CanonicalProtocolResponse {
         Ok(response)
     }
 
+    /// Validates this value and returns a structured core error on failure.
     pub fn validate(&self) -> Result<(), CoreError> {
         self.protocol.validate()?;
         self.status.validate()?;
@@ -124,31 +148,42 @@ impl CanonicalProtocolResponse {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Protocol family metadata attached to canonical requests and responses.
 pub enum ProtocolMetadata {
+    /// OpenAI-compatible protocol family or metadata.
     OpenAi(OpenAiProtocolMetadata),
+    /// Gemini-compatible protocol family or metadata.
     Gemini(GeminiProtocolMetadata),
+    /// Claude-compatible protocol family or metadata.
     Claude(ClaudeProtocolMetadata),
+    /// Codex-compatible protocol family or metadata.
     Codex(CodexProtocolMetadata),
+    /// Provider-specific protocol family or metadata.
     ProviderSpecific(ProviderSpecificProtocolMetadata),
 }
 
 impl ProtocolMetadata {
+    /// Creates default OpenAI-compatible protocol metadata.
     pub fn open_ai() -> Self {
         Self::OpenAi(OpenAiProtocolMetadata::default())
     }
 
+    /// Creates default Gemini-compatible protocol metadata.
     pub fn gemini() -> Self {
         Self::Gemini(GeminiProtocolMetadata::default())
     }
 
+    /// Creates default Claude-compatible protocol metadata.
     pub fn claude() -> Self {
         Self::Claude(ClaudeProtocolMetadata::default())
     }
 
+    /// Creates default Codex-compatible protocol metadata.
     pub fn codex() -> Self {
         Self::Codex(CodexProtocolMetadata::default())
     }
 
+    /// Creates provider-specific protocol metadata.
     pub fn provider_specific(
         provider_id: impl Into<String>,
         format_name: impl Into<String>,
@@ -158,6 +193,7 @@ impl ProtocolMetadata {
         ))
     }
 
+    /// Returns the protocol family represented by this metadata.
     pub fn family(&self) -> ProtocolFamily {
         match self {
             Self::OpenAi(_) => ProtocolFamily::OpenAi,
@@ -168,6 +204,7 @@ impl ProtocolMetadata {
         }
     }
 
+    /// Validates this value and returns a structured core error on failure.
     pub fn validate(&self) -> Result<(), CoreError> {
         match self {
             Self::OpenAi(metadata) => metadata.validate(),
@@ -180,7 +217,9 @@ impl ProtocolMetadata {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+/// OpenAI-compatible protocol metadata currently limited to optional version data.
 pub struct OpenAiProtocolMetadata {
+    /// Optional API version label for this protocol family.
     pub api_version: Option<String>,
 }
 
@@ -191,7 +230,9 @@ impl OpenAiProtocolMetadata {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+/// Gemini-compatible protocol metadata currently limited to optional version data.
 pub struct GeminiProtocolMetadata {
+    /// Optional API version label for this protocol family.
     pub api_version: Option<String>,
 }
 
@@ -202,7 +243,9 @@ impl GeminiProtocolMetadata {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+/// Claude-compatible protocol metadata currently limited to optional version data.
 pub struct ClaudeProtocolMetadata {
+    /// Optional API version label for this protocol family.
     pub api_version: Option<String>,
 }
 
@@ -213,7 +256,9 @@ impl ClaudeProtocolMetadata {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+/// Codex-compatible protocol metadata currently limited to optional version data.
 pub struct CodexProtocolMetadata {
+    /// Optional API version label for this protocol family.
     pub api_version: Option<String>,
 }
 
@@ -224,12 +269,16 @@ impl CodexProtocolMetadata {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Provider-specific protocol metadata for formats outside built-in families.
 pub struct ProviderSpecificProtocolMetadata {
+    /// Provider identifier used by routing, execution, and management state.
     pub provider_id: String,
+    /// Provider-specific protocol format name.
     pub format_name: String,
 }
 
 impl ProviderSpecificProtocolMetadata {
+    /// Creates a validated value for this public contract.
     pub fn new(
         provider_id: impl Into<String>,
         format_name: impl Into<String>,
@@ -249,12 +298,16 @@ impl ProviderSpecificProtocolMetadata {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Opaque protocol payload plus optional content type.
 pub struct ProtocolPayload {
+    /// Optional MIME-like content type for the payload.
     pub content_type: Option<String>,
+    /// Opaque body bytes or serialized response body.
     pub body: ProtocolPayloadBody,
 }
 
 impl ProtocolPayload {
+    /// Creates an empty protocol payload.
     pub fn empty() -> Self {
         Self {
             content_type: None,
@@ -262,6 +315,7 @@ impl ProtocolPayload {
         }
     }
 
+    /// Creates an opaque protocol payload with a content type.
     pub fn opaque(content_type: impl Into<String>, bytes: impl Into<Vec<u8>>) -> Self {
         Self {
             content_type: Some(content_type.into()),
@@ -275,24 +329,32 @@ impl ProtocolPayload {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Body storage for canonical protocol payloads.
 pub enum ProtocolPayloadBody {
+    /// Payload body is empty.
     Empty,
+    /// Payload body is stored as opaque bytes.
     Opaque(Vec<u8>),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// HTTP-like status attached to a canonical protocol response.
 pub struct ProtocolResponseStatus {
+    /// Stable code or numeric status for this value.
     pub code: u16,
+    /// Human-readable reason for this state.
     pub reason: Option<String>,
 }
 
 impl ProtocolResponseStatus {
+    /// Creates a validated value for this public contract.
     pub fn new(code: u16, reason: Option<String>) -> Result<Self, CoreError> {
         let status = Self { code, reason };
         status.validate()?;
         Ok(status)
     }
 
+    /// Creates a successful response value.
     pub fn success() -> Self {
         Self {
             code: 200,
@@ -313,12 +375,16 @@ impl ProtocolResponseStatus {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Result of a translation attempt or deferred translation marker.
 pub enum ProtocolTranslationOutcome<T> {
+    /// Translation produced a converted value.
     Translated(T),
+    /// Translation was validated but deliberately deferred.
     Deferred(DeferredProtocolTranslation),
 }
 
 impl<T> ProtocolTranslationOutcome<T> {
+    /// Creates a deferred protocol translation outcome.
     pub fn deferred(
         direction: ProtocolTranslationDirection,
         source_family: ProtocolFamily,
@@ -334,14 +400,20 @@ impl<T> ProtocolTranslationOutcome<T> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Deferred protocol translation details that can be converted into a core error.
 pub struct DeferredProtocolTranslation {
+    /// Request or response translation direction.
     pub direction: ProtocolTranslationDirection,
+    /// Original protocol family for translation.
     pub source_family: ProtocolFamily,
+    /// Desired protocol family for translation.
     pub target_family: ProtocolFamily,
+    /// Human-readable reason for this state.
     pub reason: String,
 }
 
 impl DeferredProtocolTranslation {
+    /// Converts deferred translation details into a structured core error.
     pub fn into_error(self) -> CoreError {
         CoreError::ProtocolTranslationDeferred {
             direction: self.direction,
@@ -353,8 +425,11 @@ impl DeferredProtocolTranslation {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Direction of a request or response protocol translation.
 pub enum ProtocolTranslationDirection {
+    /// Translation applies to a request.
     Request,
+    /// Translation applies to a response.
     Response,
 }
 
