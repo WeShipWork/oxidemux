@@ -1,3 +1,5 @@
+//! Integration tests for the oxidemux app-shell bootstrap output.
+
 use std::process::Command;
 
 #[test]
