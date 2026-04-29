@@ -1,9 +1,17 @@
+//! Subscription-aware routing policy and selection contracts.
+//!
+//! Routing state resolves requested models, evaluates provider/account targets,
+//! records skipped candidates, and reports fallback or degraded-selection reasons
+//! for consumers of the headless core.
+
 use crate::CoreError;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Facade for selecting routing targets from policy and availability state.
 pub struct RoutingBoundary;
 
 impl RoutingBoundary {
+    /// Selects a routing target from policy, request, and availability state.
     pub fn select(
         policy: &RoutingPolicy,
         request: &RoutingSelectionRequest,
@@ -14,14 +22,20 @@ impl RoutingBoundary {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Model alias, route, fallback, and default-target policy for core selection.
 pub struct RoutingPolicy {
+    /// Aliases used to resolve requested model names.
     pub model_aliases: Vec<ModelAlias>,
+    /// Configured model routes in this policy.
     pub routes: Vec<ModelRoute>,
+    /// Default fallback behavior for the policy.
     pub fallback: FallbackBehavior,
+    /// Optional explicit target used when requests omit one.
     pub default_target: Option<RoutingTarget>,
 }
 
 impl RoutingPolicy {
+    /// Creates a validated value for this public contract.
     pub fn new(routes: Vec<ModelRoute>) -> Self {
         Self {
             model_aliases: Vec::new(),
@@ -31,21 +45,25 @@ impl RoutingPolicy {
         }
     }
 
+    /// Handles with model alias for this public contract.
     pub fn with_model_alias(mut self, alias: ModelAlias) -> Self {
         self.model_aliases.push(alias);
         self
     }
 
+    /// Handles with fallback for this public contract.
     pub fn with_fallback(mut self, fallback: FallbackBehavior) -> Self {
         self.fallback = fallback;
         self
     }
 
+    /// Handles with default target for this public contract.
     pub fn with_default_target(mut self, target: RoutingTarget) -> Self {
         self.default_target = Some(target);
         self
     }
 
+    /// Validates this value and returns a structured core error on failure.
     pub fn validate(&self) -> Result<(), CoreError> {
         if let Some(target) = &self.default_target {
             target.validate("default_target")?;
@@ -96,6 +114,7 @@ impl RoutingPolicy {
         Ok(())
     }
 
+    /// Selects a routing target from policy, request, and availability state.
     pub fn select(
         &self,
         request: &RoutingSelectionRequest,
@@ -245,12 +264,16 @@ impl RoutingPolicy {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Mapping from requested model name to the configured resolved model.
 pub struct ModelAlias {
+    /// Model name requested by the caller before alias resolution.
     pub requested_model: String,
+    /// Model name after applying configured aliases.
     pub resolved_model: String,
 }
 
 impl ModelAlias {
+    /// Creates a validated value for this public contract.
     pub fn new(requested_model: impl Into<String>, resolved_model: impl Into<String>) -> Self {
         Self {
             requested_model: requested_model.into(),
@@ -265,12 +288,16 @@ impl ModelAlias {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Ordered candidate list for one resolved model.
 pub struct ModelRoute {
+    /// Model name after applying configured aliases.
     pub resolved_model: String,
+    /// Ordered routing candidates for this model or group.
     pub candidates: Vec<RoutingCandidate>,
 }
 
 impl ModelRoute {
+    /// Creates a validated value for this public contract.
     pub fn new(resolved_model: impl Into<String>, candidates: Vec<RoutingCandidate>) -> Self {
         Self {
             resolved_model: resolved_model.into(),
@@ -290,11 +317,14 @@ impl ModelRoute {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Candidate provider/account target in a route.
 pub struct RoutingCandidate {
+    /// Provider/account target associated with routing.
     pub target: RoutingTarget,
 }
 
 impl RoutingCandidate {
+    /// Creates a validated value for this public contract.
     pub fn new(target: RoutingTarget) -> Self {
         Self { target }
     }
@@ -305,12 +335,16 @@ impl RoutingCandidate {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Provider and optional account selected by routing policy.
 pub struct RoutingTarget {
+    /// Provider identifier used by routing, execution, and management state.
     pub provider_id: String,
+    /// Optional account identifier scoped to the provider.
     pub account_id: Option<String>,
 }
 
 impl RoutingTarget {
+    /// Creates a routing target for an entire provider.
     pub fn provider(provider_id: impl Into<String>) -> Self {
         Self {
             provider_id: provider_id.into(),
@@ -318,6 +352,7 @@ impl RoutingTarget {
         }
     }
 
+    /// Creates a routing target for a specific provider account.
     pub fn provider_account(provider_id: impl Into<String>, account_id: impl Into<String>) -> Self {
         Self {
             provider_id: provider_id.into(),
@@ -347,12 +382,16 @@ impl RoutingTarget {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Default fallback and degraded-candidate behavior for routing decisions.
 pub struct FallbackBehavior {
+    /// Whether routing may continue after a skipped candidate.
     pub fallback_enabled: bool,
+    /// Whether degraded targets may be selected.
     pub allow_degraded: bool,
 }
 
 impl FallbackBehavior {
+    /// Fn used by this public contract.
     pub const fn new(fallback_enabled: bool, allow_degraded: bool) -> Self {
         Self {
             fallback_enabled,
@@ -360,6 +399,7 @@ impl FallbackBehavior {
         }
     }
 
+    /// Fn used by this public contract.
     pub const fn disabled() -> Self {
         Self::new(false, false)
     }
@@ -372,15 +412,19 @@ impl Default for FallbackBehavior {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Point-in-time availability states for routing targets.
 pub struct RoutingAvailabilitySnapshot {
+    /// Availability entries keyed by routing target.
     pub targets: Vec<RoutingTargetAvailability>,
 }
 
 impl RoutingAvailabilitySnapshot {
+    /// Creates a validated value for this public contract.
     pub fn new(targets: Vec<RoutingTargetAvailability>) -> Self {
         Self { targets }
     }
 
+    /// Returns the availability state for a routing target, when present.
     pub fn state_for(&self, target: &RoutingTarget) -> Option<&RoutingAvailabilityState> {
         self.targets
             .iter()
@@ -388,6 +432,7 @@ impl RoutingAvailabilitySnapshot {
             .map(|availability| &availability.state)
     }
 
+    /// Validates this value and returns a structured core error on failure.
     pub fn validate(&self) -> Result<(), CoreError> {
         for availability in &self.targets {
             availability.validate()?;
@@ -415,12 +460,16 @@ impl RoutingAvailabilitySnapshot {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Availability state for one provider/account target.
 pub struct RoutingTargetAvailability {
+    /// Provider/account target associated with routing.
     pub target: RoutingTarget,
+    /// Availability state for this target.
     pub state: RoutingAvailabilityState,
 }
 
 impl RoutingTargetAvailability {
+    /// Creates a validated value for this public contract.
     pub fn new(target: RoutingTarget, state: RoutingAvailabilityState) -> Self {
         Self { target, state }
     }
@@ -432,11 +481,25 @@ impl RoutingTargetAvailability {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Operational state used when selecting a routing target.
 pub enum RoutingAvailabilityState {
+    /// Target is available for selection.
     Available,
-    Unavailable { reason: String },
-    Exhausted { reason: String },
-    Degraded { reason: String },
+    /// Target cannot currently be used.
+    Unavailable {
+        /// Human-readable reason for this state.
+        reason: String,
+    },
+    /// Target quota or capacity is exhausted.
+    Exhausted {
+        /// Human-readable reason for this state.
+        reason: String,
+    },
+    /// Operation completed or state exists with degraded quality.
+    Degraded {
+        /// Human-readable reason for this state.
+        reason: String,
+    },
 }
 
 impl RoutingAvailabilityState {
@@ -451,14 +514,20 @@ impl RoutingAvailabilityState {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Model routing request with optional explicit target and fallback overrides.
 pub struct RoutingSelectionRequest {
+    /// Model name requested by the caller before alias resolution.
     pub requested_model: String,
+    /// Explicit target value for the surrounding public contract.
     pub explicit_target: Option<RoutingTarget>,
+    /// Whether routing may continue after a skipped candidate.
     pub fallback_enabled: Option<bool>,
+    /// Whether degraded targets may be selected.
     pub allow_degraded: Option<bool>,
 }
 
 impl RoutingSelectionRequest {
+    /// Creates a validated value for this public contract.
     pub fn new(requested_model: impl Into<String>) -> Self {
         Self {
             requested_model: requested_model.into(),
@@ -468,16 +537,19 @@ impl RoutingSelectionRequest {
         }
     }
 
+    /// Handles with explicit target for this public contract.
     pub fn with_explicit_target(mut self, target: RoutingTarget) -> Self {
         self.explicit_target = Some(target);
         self
     }
 
+    /// Handles with fallback enabled for this public contract.
     pub fn with_fallback_enabled(mut self, fallback_enabled: bool) -> Self {
         self.fallback_enabled = Some(fallback_enabled);
         self
     }
 
+    /// Handles with degraded allowed for this public contract.
     pub fn with_degraded_allowed(mut self, allow_degraded: bool) -> Self {
         self.allow_degraded = Some(allow_degraded);
         self
@@ -495,38 +567,71 @@ impl RoutingSelectionRequest {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Selected routing target plus resolved model and skipped candidates.
 pub struct RoutingSelectionResult {
+    /// Model name requested by the caller before alias resolution.
     pub requested_model: String,
+    /// Model name after applying configured aliases.
     pub resolved_model: String,
+    /// Provider/account target selected by routing.
     pub selected_target: RoutingTarget,
+    /// Availability state observed for the selected target.
     pub selected_state: RoutingAvailabilityState,
+    /// Selection mode that explains why this route was chosen.
     pub decision_mode: RoutingDecisionMode,
+    /// Candidates skipped while choosing the selected target.
     pub skipped_candidates: Vec<SkippedRoutingCandidate>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Mode that explains why a target was selected.
 pub enum RoutingDecisionMode {
+    /// Selection used an explicit or default target.
     ExplicitTarget,
+    /// Selection used the first available route candidate.
     Priority,
+    /// Selection used a later fallback candidate.
     Fallback,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Candidate skipped during route evaluation and its reason.
 pub struct SkippedRoutingCandidate {
+    /// Provider/account target associated with routing.
     pub target: RoutingTarget,
+    /// Human-readable reason for this state.
     pub reason: RoutingSkipReason,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Reason a routing candidate was not selected.
 pub enum RoutingSkipReason {
+    /// No availability entry existed for the candidate.
     MissingAvailability,
-    Unavailable { reason: String },
-    Exhausted { reason: String },
-    DegradedDisallowed { reason: String },
-    DegradedDeferred { reason: String },
+    /// Target cannot currently be used.
+    Unavailable {
+        /// Human-readable reason for this state.
+        reason: String,
+    },
+    /// Target quota or capacity is exhausted.
+    Exhausted {
+        /// Human-readable reason for this state.
+        reason: String,
+    },
+    /// Degraded candidate was skipped because degraded routing is disabled.
+    DegradedDisallowed {
+        /// Human-readable reason for this state.
+        reason: String,
+    },
+    /// Degraded candidate was held while healthier fallbacks were evaluated.
+    DegradedDeferred {
+        /// Human-readable reason for this state.
+        reason: String,
+    },
 }
 
 impl RoutingSkipReason {
+    /// Returns a human-readable message for this diagnostic.
     pub fn message(&self) -> String {
         match self {
             Self::MissingAvailability => "availability was not supplied".to_string(),
@@ -545,44 +650,72 @@ impl RoutingSkipReason {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Matchable failure for invalid policy, invalid request, or unavailable routes.
 pub enum RoutingFailure {
+    /// Routing policy validation failed.
     InvalidPolicy {
+        /// Field path associated with this validation diagnostic.
         field: &'static str,
+        /// Human-readable diagnostic message.
         message: String,
     },
+    /// Routing request validation failed.
     InvalidRequest {
+        /// Field path associated with this validation diagnostic.
         field: &'static str,
+        /// Human-readable diagnostic message.
         message: String,
     },
+    /// No route exists for the resolved model.
     NoRoute {
+        /// Model name requested by the caller before alias resolution.
         requested_model: String,
+        /// Model name after applying configured aliases.
         resolved_model: String,
     },
+    /// Explicit target was absent from availability state.
     MissingExplicitTarget {
+        /// Provider/account target associated with routing.
         target: RoutingTarget,
     },
+    /// Fallback was disabled after a candidate was skipped.
     FallbackDisabled {
+        /// Provider/account target associated with routing.
         target: RoutingTarget,
+        /// Human-readable reason for this state.
         reason: RoutingSkipReason,
     },
+    /// All candidates were exhausted.
     ExhaustedCandidates {
+        /// Model name requested by the caller before alias resolution.
         requested_model: String,
+        /// Model name after applying configured aliases.
         resolved_model: String,
+        /// Candidates skipped while evaluating this failure.
         skipped: Vec<SkippedRoutingCandidate>,
     },
+    /// Only degraded candidates remained and could not be selected.
     DegradedOnlyCandidates {
+        /// Model name requested by the caller before alias resolution.
         requested_model: String,
+        /// Model name after applying configured aliases.
         resolved_model: String,
+        /// Candidates skipped while evaluating this failure.
         skipped: Vec<SkippedRoutingCandidate>,
     },
+    /// No available candidate remained.
     NoAvailableCandidates {
+        /// Model name requested by the caller before alias resolution.
         requested_model: String,
+        /// Model name after applying configured aliases.
         resolved_model: String,
+        /// Candidates skipped while evaluating this failure.
         skipped: Vec<SkippedRoutingCandidate>,
     },
 }
 
 impl RoutingFailure {
+    /// Returns a human-readable message for this diagnostic.
     pub fn message(&self) -> String {
         match self {
             Self::InvalidPolicy { field, message } => {
