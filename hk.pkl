@@ -127,6 +127,18 @@ local quality_steps = new Mapping<String, Step> {
         glob = List("*.rs", "Cargo.toml", "Cargo.lock")
         check = "scripts/quiet-on-success.sh cargo test --all-targets --all-features"
     }
+    ["mise-security"] {
+        glob = List(
+            "Cargo.toml",
+            "Cargo.lock",
+            "mise.toml",
+            "deny.toml",
+            "hk.pkl",
+            ".github/workflows/*.yml",
+            ".github/workflows/*.yaml",
+        )
+        check = "scripts/quiet-on-success.sh mise run security"
+    }
 }
 
 hooks {
