@@ -95,6 +95,8 @@ fn management_snapshot_can_be_constructed_from_in_memory_values() {
             routing_default: RoutingDefault::named("manual"),
             provider_references: vec!["openai".to_string()],
         },
+        file_configuration: None,
+        last_configuration_load_failure: None,
         providers: vec![provider],
         usage: UsageSummary {
             requests: MeteredValue::Known(3),

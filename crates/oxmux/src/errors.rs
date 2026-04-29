@@ -1,4 +1,103 @@
 use core::fmt;
+use std::path::{Path, PathBuf};
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConfigurationError {
+    pub kind: ConfigurationErrorKind,
+    pub field_path: String,
+    pub invalid_value: InvalidConfigurationValue,
+    pub source: Option<ConfigurationSourceMetadata>,
+    pub message: Option<String>,
+}
+
+impl ConfigurationError {
+    pub fn new(
+        kind: ConfigurationErrorKind,
+        field_path: impl Into<String>,
+        invalid_value: InvalidConfigurationValue,
+        source: Option<ConfigurationSourceMetadata>,
+    ) -> Self {
+        Self {
+            kind,
+            field_path: field_path.into(),
+            invalid_value,
+            source,
+            message: None,
+        }
+    }
+
+    pub fn with_message(
+        kind: ConfigurationErrorKind,
+        field_path: impl Into<String>,
+        invalid_value: InvalidConfigurationValue,
+        source: Option<ConfigurationSourceMetadata>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            kind,
+            field_path: field_path.into(),
+            invalid_value,
+            source,
+            message: Some(message.into()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ConfigurationErrorKind {
+    ReadFailed,
+    ParseFailed,
+    UnsupportedFormat,
+    MissingRequiredField,
+    UnknownField,
+    InvalidVersion,
+    InvalidListenAddress,
+    InvalidPort,
+    DuplicateProviderId,
+    DuplicateAccountId,
+    InvalidProviderProtocolFamily,
+    InvalidCredentialReference,
+    UnknownProviderReference,
+    UnknownAccountReference,
+    InvalidRoutingDefault,
+    InvalidLoggingSetting,
+    InvalidUsageCollectionSetting,
+    InvalidAutoStartIntent,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InvalidConfigurationValue {
+    Missing,
+    Malformed,
+    Unsupported,
+    Duplicate,
+    UnknownReference,
+    SecretLike,
+    OutOfRange,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConfigurationSourceMetadata {
+    pub path: Option<PathBuf>,
+    pub description: String,
+}
+
+impl ConfigurationSourceMetadata {
+    pub fn memory() -> Self {
+        Self {
+            path: None,
+            description: "in-memory TOML contents".to_string(),
+        }
+    }
+
+    pub fn for_path(path: impl AsRef<Path>) -> Self {
+        let path = path.as_ref().to_path_buf();
+        Self {
+            description: path.display().to_string(),
+            path: Some(path),
+        }
+    }
+}
 
 use crate::{
     MinimalProxyErrorCode, ProtocolFamily, ProtocolTranslationDirection, ProviderExecutionFailure,
@@ -19,6 +118,9 @@ pub enum CoreError {
     ConfigurationValidation {
         field: &'static str,
         message: String,
+    },
+    Configuration {
+        errors: Vec<ConfigurationError>,
     },
     LocalRuntimeConfiguration {
         field: &'static str,
@@ -90,6 +192,13 @@ impl fmt::Display for CoreError {
                 write!(
                     formatter,
                     "configuration field {field} is invalid: {message}"
+                )
+            }
+            Self::Configuration { errors } => {
+                write!(
+                    formatter,
+                    "configuration load failed with {} error(s)",
+                    errors.len()
                 )
             }
             Self::LocalRuntimeConfiguration { field, message } => {
