@@ -1,3 +1,10 @@
+//! File-backed and layered configuration public contracts.
+//!
+//! This module defines validated configuration snapshots, update intents, file
+//! configuration state, layered reload outcomes, and management-visible
+//! configuration data for the headless core. It stores credential references but
+//! does not implement platform secret storage or provider authentication flows.
+
 use std::fs;
 use std::net::IpAddr;
 use std::path::Path;
@@ -20,17 +27,21 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Boundary facade for loading and replacing validated core configuration state.
 pub struct ConfigurationBoundary;
 
 impl ConfigurationBoundary {
+    /// Loads and validates a TOML configuration file.
     pub fn load_file(path: impl AsRef<Path>) -> Result<ValidatedFileConfiguration, CoreError> {
         ValidatedFileConfiguration::load_file(path)
     }
 
+    /// Loads and validates in-memory TOML configuration contents.
     pub fn load_contents(contents: &str) -> Result<ValidatedFileConfiguration, CoreError> {
         ValidatedFileConfiguration::load_contents(contents)
     }
 
+    /// Replaces layered configuration inputs and records the reload outcome.
     pub fn replace_layered(
         state: &mut LayeredConfigurationState,
         inputs: Vec<LayeredConfigurationInput>,
@@ -40,17 +51,26 @@ impl ConfigurationBoundary {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Management-visible snapshot of active core configuration values.
 pub struct ConfigurationSnapshot {
+    /// Loopback listen address used by local proxy/runtime configuration.
     pub listen_address: IpAddr,
+    /// TCP port used by local proxy/runtime configuration.
     pub port: u16,
+    /// Configured local runtime auto-start intent.
     pub auto_start: bool,
+    /// Whether logging is enabled by configuration.
     pub logging_enabled: bool,
+    /// Whether usage collection is enabled in configuration.
     pub usage_collection_enabled: bool,
+    /// Default routing label exposed in the snapshot.
     pub routing_default: RoutingDefault,
+    /// Provider identifiers referenced by this snapshot.
     pub provider_references: Vec<String>,
 }
 
 impl ConfigurationSnapshot {
+    /// Returns the local development bootstrap configuration snapshot.
     pub fn local_development() -> Self {
         Self {
             listen_address: IpAddr::from([127, 0, 0, 1]),
@@ -65,11 +85,14 @@ impl ConfigurationSnapshot {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Named routing default selected from configuration or bootstrap defaults.
 pub struct RoutingDefault {
+    /// Stable name associated with this value.
     pub name: String,
 }
 
 impl RoutingDefault {
+    /// Creates a named routing default.
     pub fn named(name: impl Into<String>) -> Self {
         Self { name: name.into() }
     }
@@ -87,17 +110,26 @@ impl RoutingDefault {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+/// Partial configuration update requested by a management or app-shell caller.
 pub struct ConfigurationUpdateIntent {
+    /// Loopback listen address used by local proxy/runtime configuration.
     pub listen_address: Option<String>,
+    /// TCP port used by local proxy/runtime configuration.
     pub port: Option<u16>,
+    /// Configured local runtime auto-start intent.
     pub auto_start: Option<bool>,
+    /// Whether logging is enabled by configuration.
     pub logging_enabled: Option<bool>,
+    /// Whether usage collection is enabled in configuration.
     pub usage_collection_enabled: Option<bool>,
+    /// Default routing label exposed in the snapshot.
     pub routing_default: Option<RoutingDefault>,
+    /// Provider identifiers referenced by this snapshot.
     pub provider_references: Option<Vec<String>>,
 }
 
 impl ConfigurationUpdateIntent {
+    /// Validates this value and returns a structured core error on failure.
     pub fn validate(&self) -> Result<ValidatedConfigurationUpdate, CoreError> {
         let listen_address = self
             .listen_address
@@ -133,31 +165,51 @@ impl ConfigurationUpdateIntent {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Configuration update with parsed and validated field values.
 pub struct ValidatedConfigurationUpdate {
+    /// Loopback listen address used by local proxy/runtime configuration.
     pub listen_address: Option<IpAddr>,
+    /// TCP port used by local proxy/runtime configuration.
     pub port: Option<u16>,
+    /// Configured local runtime auto-start intent.
     pub auto_start: Option<bool>,
+    /// Whether logging is enabled by configuration.
     pub logging_enabled: Option<bool>,
+    /// Whether usage collection is enabled in configuration.
     pub usage_collection_enabled: Option<bool>,
+    /// Default routing label exposed in the snapshot.
     pub routing_default: Option<RoutingDefault>,
+    /// Provider identifiers referenced by this snapshot.
     pub provider_references: Option<Vec<String>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Validated file-backed configuration ready for core routing and management state.
 pub struct ValidatedFileConfiguration {
+    /// Configuration source metadata for this value.
     pub source: ConfigurationSourceMetadata,
+    /// Validated proxy configuration.
     pub proxy: FileProxyConfiguration,
+    /// Provider declarations from validated configuration.
     pub providers: Vec<FileProviderConfiguration>,
+    /// Validated routing default candidates.
     pub routing_defaults: Vec<FileRoutingDefaultConfiguration>,
+    /// Routing defaults grouped for policy construction.
     pub routing_default_groups: Vec<FileRoutingDefaultGroup>,
+    /// Routing policy derived from validated configuration.
     pub routing_policy: RoutingPolicy,
+    /// Configured logging setting.
     pub logging: LoggingSetting,
+    /// Whether usage collection is enabled in configuration.
     pub usage_collection_enabled: bool,
+    /// Configured local runtime auto-start intent.
     pub auto_start: AutoStartIntent,
+    /// Non-fatal warnings visible to management consumers.
     pub warnings: Vec<String>,
 }
 
 impl ValidatedFileConfiguration {
+    /// Loads and validates a TOML configuration file.
     pub fn load_file(path: impl AsRef<Path>) -> Result<Self, CoreError> {
         let path = path.as_ref();
         let source = ConfigurationSourceMetadata::for_path(path);
@@ -183,10 +235,12 @@ impl ValidatedFileConfiguration {
         Self::load_contents_with_source(&contents, source)
     }
 
+    /// Loads and validates in-memory TOML configuration contents.
     pub fn load_contents(contents: &str) -> Result<Self, CoreError> {
         Self::load_contents_with_source(contents, ConfigurationSourceMetadata::memory())
     }
 
+    /// Loads in-memory TOML configuration contents with explicit source metadata.
     pub fn load_contents_with_source(
         contents: &str,
         source: ConfigurationSourceMetadata,
@@ -195,6 +249,7 @@ impl ValidatedFileConfiguration {
         validate_raw_configuration(raw, source)
     }
 
+    /// Returns the management-visible configuration snapshot.
     pub fn configuration_snapshot(&self) -> ConfigurationSnapshot {
         ConfigurationSnapshot {
             listen_address: self.proxy.listen_address,
@@ -215,6 +270,7 @@ impl ValidatedFileConfiguration {
         }
     }
 
+    /// Builds management-visible provider summaries from validated configuration.
     pub fn provider_summaries(&self) -> Vec<ProviderSummary> {
         self.providers
             .iter()
@@ -246,6 +302,7 @@ impl ValidatedFileConfiguration {
             .collect()
     }
 
+    /// Returns the configured usage summary interpretation.
     pub fn usage_summary(&self) -> UsageSummary {
         if self.usage_collection_enabled {
             UsageSummary::zero()
@@ -254,85 +311,124 @@ impl ValidatedFileConfiguration {
         }
     }
 
+    /// Returns quota summary state for this configuration.
     pub fn quota_summary(&self) -> QuotaSummary {
         QuotaSummary::unknown()
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Validated local proxy listen configuration from a file source.
 pub struct FileProxyConfiguration {
+    /// Loopback listen address used by local proxy/runtime configuration.
     pub listen_address: IpAddr,
+    /// TCP port used by local proxy/runtime configuration.
     pub port: u16,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Validated provider declaration from file-backed configuration.
 pub struct FileProviderConfiguration {
+    /// Stable provider or account identifier.
     pub id: String,
+    /// Protocol family supported by this provider.
     pub protocol_family: ProtocolFamily,
+    /// Whether routing may select this provider.
     pub routing_eligible: bool,
+    /// Account declarations for this provider.
     pub accounts: Vec<FileAccountConfiguration>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Validated account declaration for a configured provider.
 pub struct FileAccountConfiguration {
+    /// Stable provider or account identifier.
     pub id: String,
     pub(super) credential_reference: String,
 }
 
 impl FileAccountConfiguration {
+    /// Reports whether this account contains a non-empty credential reference.
     pub fn credential_reference_present(&self) -> bool {
         !self.credential_reference.is_empty()
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// One configured routing default candidate for a model and provider target.
 pub struct FileRoutingDefaultConfiguration {
+    /// Stable name associated with this value.
     pub name: String,
+    /// Model associated with this routing default.
     pub model: String,
+    /// Provider/account target associated with routing.
     pub target: RoutingTarget,
+    /// Whether routing may continue after a skipped candidate.
     pub fallback_enabled: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Grouped routing defaults that share a name and model.
 pub struct FileRoutingDefaultGroup {
+    /// Stable name associated with this value.
     pub name: String,
+    /// Model associated with this routing default.
     pub model: String,
+    /// Ordered routing candidates for this group.
     pub candidates: Vec<FileRoutingDefaultConfiguration>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Configured core logging verbosity preference.
 pub enum LoggingSetting {
+    /// Logging is disabled.
     Off,
+    /// Standard logging is enabled.
     Standard,
+    /// Verbose logging is enabled.
     Verbose,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Configured startup intent for the local proxy lifecycle.
 pub enum AutoStartIntent {
+    /// Intent or feature is disabled.
     Disabled,
+    /// Intent or feature is enabled.
     Enabled,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Precedence role for one layered configuration input.
 pub enum ConfigurationLayerKind {
+    /// Layer contains bundled default configuration.
     BundledDefaults,
+    /// Layer contains user-owned configuration.
     UserOwned,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Source metadata attached to one configuration layer.
 pub struct ConfigurationLayerSource {
+    /// Configuration layer precedence kind.
     pub kind: ConfigurationLayerKind,
+    /// Configuration source metadata for this value.
     pub source: ConfigurationSourceMetadata,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Raw configuration contents submitted as one ordered layer.
 pub struct LayeredConfigurationInput {
+    /// Configuration layer precedence kind.
     pub kind: ConfigurationLayerKind,
+    /// Configuration source metadata for this value.
     pub source: ConfigurationSourceMetadata,
+    /// Raw configuration contents for this layer.
     pub contents: String,
 }
 
 impl LayeredConfigurationInput {
+    /// Creates a bundled-default configuration layer from raw contents.
     pub fn bundled_defaults(contents: impl Into<String>) -> Self {
         Self {
             kind: ConfigurationLayerKind::BundledDefaults,
@@ -341,6 +437,7 @@ impl LayeredConfigurationInput {
         }
     }
 
+    /// Creates a user-owned configuration layer from raw contents and source metadata.
     pub fn user_owned(contents: impl Into<String>, source: ConfigurationSourceMetadata) -> Self {
         Self {
             kind: ConfigurationLayerKind::UserOwned,
@@ -351,39 +448,59 @@ impl LayeredConfigurationInput {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Stable fingerprint for the active validated layered configuration.
 pub struct ConfigurationFingerprint {
+    /// Stable fingerprint value.
     pub value: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Validated merged configuration plus its fingerprint and source list.
 pub struct ValidatedLayeredConfiguration {
+    /// Validated file configuration.
     pub configuration: ValidatedFileConfiguration,
+    /// Stable fingerprint for this configuration.
     pub fingerprint: ConfigurationFingerprint,
+    /// Configuration layer sources that contributed to this state.
     pub sources: Vec<ConfigurationLayerSource>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Rejected layered configuration candidate with validation errors and fingerprints.
 pub struct LayeredConfigurationRejectedCandidate {
+    /// Configuration layer sources that contributed to this state.
     pub sources: Vec<ConfigurationLayerSource>,
+    /// Structured configuration errors associated with this state.
     pub errors: Vec<ConfigurationError>,
+    /// Fingerprint of the previous active configuration, when available.
     pub previous_active_fingerprint: Option<ConfigurationFingerprint>,
+    /// Fingerprint of the rejected candidate, when available.
     pub candidate_fingerprint: Option<ConfigurationFingerprint>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Result of replacing layered configuration inputs.
 pub enum LayeredConfigurationReloadOutcome {
+    /// Reload candidate matched the active configuration fingerprint.
     Unchanged {
+        /// Fingerprint for the active layered configuration.
         active_fingerprint: ConfigurationFingerprint,
+        /// Configuration layer sources that contributed to this state.
         sources: Vec<ConfigurationLayerSource>,
     },
+    /// Reload candidate replaced the active configuration.
     Replaced {
+        /// Fingerprint for the active layered configuration.
         active_fingerprint: ConfigurationFingerprint,
+        /// Configuration layer sources that contributed to this state.
         sources: Vec<ConfigurationLayerSource>,
     },
+    /// Reload candidate was rejected and active configuration was preserved.
     Rejected(LayeredConfigurationRejectedCandidate),
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+/// Mutable holder for active layered configuration and latest reload diagnostics.
 pub struct LayeredConfigurationState {
     active: Option<ValidatedLayeredConfiguration>,
     latest_reload_outcome: Option<LayeredConfigurationReloadOutcome>,
@@ -391,22 +508,27 @@ pub struct LayeredConfigurationState {
 }
 
 impl LayeredConfigurationState {
+    /// Creates an empty mutable state holder.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Returns the active validated configuration, when one exists.
     pub fn active(&self) -> Option<&ValidatedLayeredConfiguration> {
         self.active.as_ref()
     }
 
+    /// Returns the most recent layered reload outcome, when one exists.
     pub fn latest_reload_outcome(&self) -> Option<&LayeredConfigurationReloadOutcome> {
         self.latest_reload_outcome.as_ref()
     }
 
+    /// Returns the most recent rejected layered candidate, when one exists.
     pub fn failed_candidate(&self) -> Option<&LayeredConfigurationRejectedCandidate> {
         self.failed_candidate.as_ref()
     }
 
+    /// Attempts to replace the active layered configuration from new inputs.
     pub fn replace(
         &mut self,
         inputs: Vec<LayeredConfigurationInput>,
@@ -455,28 +577,34 @@ impl LayeredConfigurationState {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+/// Mutable holder for the active file configuration and last load failure.
 pub struct FileConfigurationState {
     active: Option<ValidatedFileConfiguration>,
     last_failure: Option<ConfigurationLoadFailure>,
 }
 
 impl FileConfigurationState {
+    /// Creates an empty mutable state holder.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Returns the active validated configuration, when one exists.
     pub fn active(&self) -> Option<&ValidatedFileConfiguration> {
         self.active.as_ref()
     }
 
+    /// Returns the most recent load failure, when one exists.
     pub fn last_failure(&self) -> Option<&ConfigurationLoadFailure> {
         self.last_failure.as_ref()
     }
 
+    /// Replaces active file configuration from in-memory contents.
     pub fn replace_from_contents(&mut self, contents: &str) -> Result<(), CoreError> {
         self.replace_from_contents_with_source(contents, ConfigurationSourceMetadata::memory())
     }
 
+    /// Replaces active file configuration from in-memory contents and source metadata.
     pub fn replace_from_contents_with_source(
         &mut self,
         contents: &str,
@@ -495,6 +623,7 @@ impl FileConfigurationState {
         }
     }
 
+    /// Replaces active file configuration from a TOML file.
     pub fn replace_from_file(&mut self, path: impl AsRef<Path>) -> Result<(), CoreError> {
         let path = path.as_ref();
         let source = ConfigurationSourceMetadata::for_path(path);
@@ -513,8 +642,11 @@ impl FileConfigurationState {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Configuration source and validation errors from the most recent failed load.
 pub struct ConfigurationLoadFailure {
+    /// Configuration source metadata for this value.
     pub source: ConfigurationSourceMetadata,
+    /// Structured configuration errors associated with this state.
     pub errors: Vec<ConfigurationError>,
 }
 
@@ -535,14 +667,23 @@ impl ConfigurationLoadFailure {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Configuration details exposed through management snapshots for file-backed state.
 pub struct FileBackedManagementConfiguration {
+    /// Configuration source metadata for this value.
     pub source: ConfigurationSourceMetadata,
+    /// Validated proxy configuration.
     pub proxy: FileProxyConfiguration,
+    /// Validated routing default candidates.
     pub routing_defaults: Vec<FileRoutingDefaultConfiguration>,
+    /// Routing defaults grouped for policy construction.
     pub routing_default_groups: Vec<FileRoutingDefaultGroup>,
+    /// Configured logging setting.
     pub logging: LoggingSetting,
+    /// Whether usage collection is enabled in configuration.
     pub usage_collection_enabled: bool,
+    /// Configured local runtime auto-start intent.
     pub auto_start: AutoStartIntent,
+    /// Non-fatal warnings visible to management consumers.
     pub warnings: Vec<String>,
 }
 
