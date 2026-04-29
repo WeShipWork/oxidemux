@@ -150,7 +150,9 @@ fn infer_unknown_field_path(contents: &str, span: Option<Range<usize>>, message:
         return field.to_string();
     };
 
-    let prefix = &contents[..span.start.min(contents.len())];
+    let prefix = contents
+        .get(..span.start.min(contents.len()))
+        .unwrap_or(contents);
     let table = prefix.lines().rev().find_map(|line| {
         let line = line.trim();
         if line.starts_with("[[") && line.ends_with("]]") {
