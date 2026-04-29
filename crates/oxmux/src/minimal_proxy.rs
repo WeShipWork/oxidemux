@@ -10,11 +10,11 @@ use crate::{
     RoutingBoundary, RoutingPolicy, RoutingSelectionRequest,
 };
 
-/// M i n i m a l c h a t c o m p l e t i o n s p a t h used by this public contract.
+/// OpenAI-compatible chat completions path served by the minimal proxy engine.
 pub const MINIMAL_CHAT_COMPLETIONS_PATH: &str = "/v1/chat/completions";
-/// M i n i m a l p r o x y j s o n c o n t e n t t y p e used by this public contract.
+/// JSON content type returned by deterministic minimal proxy responses.
 pub const MINIMAL_PROXY_JSON_CONTENT_TYPE: &str = "application/json";
-/// M a x m i n i m a l p r o x y b o d y b y t e s used by this public contract.
+/// Maximum request body size accepted by the minimal proxy parser.
 pub const MAX_MINIMAL_PROXY_BODY_BYTES: usize = 64 * 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -239,7 +239,7 @@ pub struct MinimalProxyEngineConfig<'a> {
 }
 
 impl<'a> MinimalProxyEngineConfig<'a> {
-    /// Creates a validated value for this public contract.
+    /// Creates engine configuration from routing, availability, and provider execution inputs.
     pub fn new(
         routing_policy: &'a RoutingPolicy,
         availability: &'a RoutingAvailabilitySnapshot,

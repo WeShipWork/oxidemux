@@ -18,9 +18,9 @@ use crate::{
     RoutingPolicy, UptimeMetadata, UsageSummary, core_identity,
 };
 
-/// L o c a l h e a l t h p a t h used by this public contract.
+/// HTTP path used by the local health runtime to serve health responses.
 pub const LOCAL_HEALTH_PATH: &str = "/health";
-/// L o c a l h e a l t h r e s p o n s e b o d y used by this public contract.
+/// Response body returned by the local health runtime for a successful health check.
 pub const LOCAL_HEALTH_RESPONSE_BODY: &str = "oxmux local health runtime: healthy\n";
 #[cfg(test)]
 const MAX_LOCAL_HEALTH_REQUEST_BYTES: usize = 8 * 1024;
@@ -37,7 +37,7 @@ pub struct LocalHealthRuntimeConfig {
 }
 
 impl LocalHealthRuntimeConfig {
-    /// Creates a validated value for this public contract.
+    /// Creates loopback runtime configuration and rejects non-loopback addresses.
     pub fn new(listen_address: IpAddr, port: u16) -> Result<Self, CoreError> {
         let config = Self {
             listen_address,
@@ -85,7 +85,7 @@ pub struct LocalProxyRouteConfig {
 }
 
 impl LocalProxyRouteConfig {
-    /// Creates a validated value for this public contract.
+    /// Creates route configuration that connects routing policy to provider execution.
     pub fn new(
         routing_policy: RoutingPolicy,
         availability: RoutingAvailabilitySnapshot,
