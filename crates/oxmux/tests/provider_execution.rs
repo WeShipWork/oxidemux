@@ -492,6 +492,8 @@ fn management_snapshot_can_include_mock_provider_health() -> Result<(), CoreErro
             routing_default: RoutingDefault::named("manual"),
             provider_references: vec!["mock-health".to_string()],
         },
+        file_configuration: None,
+        last_configuration_load_failure: None,
         providers: vec![provider],
         usage: UsageSummary::zero(),
         quota: QuotaSummary::unknown(),

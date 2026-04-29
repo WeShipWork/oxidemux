@@ -1,0 +1,50 @@
+version = 1
+
+[proxy]
+listen-address = "127.0.0.1"
+port = 8787
+
+[[providers]]
+id = "mock-openai"
+protocol-family = "openai"
+routing-eligible = true
+
+[[providers.accounts]]
+id = "default"
+credential-reference = "mock-openai/default"
+
+[[providers]]
+id = "mock-claude"
+protocol-family = "claude"
+routing-eligible = true
+
+[[providers.accounts]]
+id = "fallback"
+credential-reference = "mock-claude/fallback"
+
+[[routing.defaults]]
+name = "chat"
+model = "gpt-4o-mini"
+provider-id = "mock-openai"
+account-id = "default"
+fallback-enabled = true
+
+[[routing.defaults]]
+name = "chat"
+model = "gpt-4o-mini"
+provider-id = "mock-claude"
+account-id = "fallback"
+fallback-enabled = false
+
+[[routing.defaults]]
+name = "embeddings"
+model = "text-embedding-3-small"
+provider-id = "mock-openai"
+fallback-enabled = false
+
+[observability]
+logging = "standard"
+usage-collection = true
+
+[lifecycle]
+auto-start = "disabled"

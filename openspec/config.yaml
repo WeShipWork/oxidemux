@@ -16,6 +16,7 @@ context: |
   - Prefer correctness and clarity over cleverness
   - Avoid unwrap(), panic-prone indexing, mod.rs files, and silent fallible error discards
   - Propagate errors with ? or handle them explicitly so UI-facing failures stay visible
+  - Avoid god-files: keep implementation files focused and prefer splitting new logical components before any file grows beyond 800 lines
 
 rules:
   specs:
@@ -32,3 +33,4 @@ rules:
     - Prefer Rust-native and GPUI-compatible designs over web or Tauri assumptions
     - Document credential storage, provider/account state, configuration, and management API boundaries
     - Explain protocol translation between OpenAI, Gemini, Claude, Codex, and provider-specific APIs
+    - Call out any design likely to create files over 800 lines and plan module boundaries that keep files focused

@@ -124,6 +124,8 @@ impl LocalHealthRuntimeStatus {
             lifecycle: self.lifecycle.clone(),
             health: self.health.clone(),
             configuration,
+            file_configuration: None,
+            last_configuration_load_failure: None,
             providers: Vec::new(),
             usage: UsageSummary::zero(),
             quota: QuotaSummary::unknown(),

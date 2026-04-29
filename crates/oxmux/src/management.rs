@@ -4,7 +4,10 @@ pub struct ManagementBoundary;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use crate::configuration::ConfigurationSnapshot;
+use crate::configuration::{
+    ConfigurationLoadFailure, ConfigurationSnapshot, FileBackedManagementConfiguration,
+    FileConfigurationState,
+};
 use crate::provider::{DegradedReason, ProviderSummary};
 use crate::usage::{QuotaSummary, UsageSummary};
 use crate::{CoreError, CoreIdentity, core_identity};
@@ -15,6 +18,8 @@ pub struct ManagementSnapshot {
     pub lifecycle: ProxyLifecycleState,
     pub health: CoreHealthState,
     pub configuration: ConfigurationSnapshot,
+    pub file_configuration: Option<FileBackedManagementConfiguration>,
+    pub last_configuration_load_failure: Option<ConfigurationLoadFailure>,
     pub providers: Vec<ProviderSummary>,
     pub usage: UsageSummary,
     pub quota: QuotaSummary,
@@ -29,12 +34,34 @@ impl ManagementSnapshot {
             lifecycle: ProxyLifecycleState::Stopped,
             health: CoreHealthState::Healthy,
             configuration: ConfigurationSnapshot::local_development(),
+            file_configuration: None,
+            last_configuration_load_failure: None,
             providers: Vec::new(),
             usage: UsageSummary::zero(),
             quota: QuotaSummary::unknown(),
             warnings: Vec::new(),
             errors: Vec::new(),
         }
+    }
+
+    pub fn from_file_configuration_state(state: &FileConfigurationState) -> Self {
+        let mut snapshot = Self::inert_bootstrap();
+        if let Some(configuration) = state.active() {
+            snapshot.configuration = configuration.configuration_snapshot();
+            snapshot.file_configuration =
+                Some(FileBackedManagementConfiguration::from(configuration));
+            snapshot.providers = configuration.provider_summaries();
+            snapshot.usage = configuration.usage_summary();
+            snapshot.quota = configuration.quota_summary();
+            snapshot.warnings = configuration.warnings.clone();
+        }
+        snapshot.last_configuration_load_failure = state.last_failure().cloned();
+        if let Some(failure) = state.last_failure() {
+            snapshot.errors = vec![CoreError::Configuration {
+                errors: failure.errors.clone(),
+            }];
+        }
+        snapshot
     }
 }
 

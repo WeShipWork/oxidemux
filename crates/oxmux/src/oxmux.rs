@@ -10,9 +10,16 @@ pub mod streaming;
 pub mod usage;
 
 pub use configuration::{
-    ConfigurationSnapshot, ConfigurationUpdateIntent, RoutingDefault, ValidatedConfigurationUpdate,
+    AutoStartIntent, ConfigurationBoundary, ConfigurationLoadFailure, ConfigurationSnapshot,
+    ConfigurationUpdateIntent, FileAccountConfiguration, FileBackedManagementConfiguration,
+    FileConfigurationState, FileProviderConfiguration, FileProxyConfiguration,
+    FileRoutingDefaultConfiguration, FileRoutingDefaultGroup, LoggingSetting, RoutingDefault,
+    ValidatedConfigurationUpdate, ValidatedFileConfiguration,
 };
-pub use errors::CoreError;
+pub use errors::{
+    ConfigurationError, ConfigurationErrorKind, ConfigurationSourceMetadata, CoreError,
+    InvalidConfigurationValue,
+};
 pub use local_proxy_runtime::{
     LOCAL_HEALTH_PATH, LOCAL_HEALTH_RESPONSE_BODY, LocalHealthRuntime, LocalHealthRuntimeConfig,
     LocalHealthRuntimeStatus, LocalProxyRouteConfig,
