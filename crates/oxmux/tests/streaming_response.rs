@@ -1,3 +1,5 @@
+//! Integration tests for streaming response validation.
+
 use oxmux::{
     CancellationReason, CanonicalProtocolResponse, CoreError, InvalidStreamSequence,
     ProtocolMetadata, ProtocolPayload, ProtocolPayloadBody, ProtocolResponseStatus, ResponseMode,

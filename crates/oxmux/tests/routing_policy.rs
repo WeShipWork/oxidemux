@@ -1,3 +1,5 @@
+//! Integration tests for routing policy selection.
+
 use oxmux::{
     AuthMethodCategory, CanonicalProtocolResponse, CoreError, FallbackBehavior,
     MockProviderAccount, MockProviderHarness, MockProviderOutcome, ModelAlias, ModelRoute,

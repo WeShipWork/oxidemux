@@ -1,3 +1,5 @@
+//! Integration tests for provider execution contracts.
+
 use std::net::{IpAddr, Ipv4Addr};
 
 use oxmux::{
