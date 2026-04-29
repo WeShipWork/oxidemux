@@ -176,12 +176,12 @@ impl StreamMetadata {
         validate_required_text("stream.metadata.value", &self.value)
     }
 
-    /// Handles name for this public contract.
+    /// Returns the metadata entry name.
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    /// Handles value for this public contract.
+    /// Returns the metadata entry value.
     pub fn value(&self) -> &str {
         &self.value
     }

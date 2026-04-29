@@ -136,7 +136,7 @@ pub struct LayeredManagementConfiguration {
 pub enum CoreHealthState {
     /// Core state is healthy.
     Healthy,
-    /// Operation completed or state exists with degraded quality.
+    /// Core is usable with degraded components or stale state.
     Degraded {
         /// Reasons explaining degraded state.
         reasons: Vec<DegradedReason>,
@@ -162,7 +162,7 @@ pub enum ProxyLifecycleState {
         /// Uptime metadata associated with a running or degraded runtime.
         uptime: UptimeMetadata,
     },
-    /// Operation completed or state exists with degraded quality.
+    /// Runtime is partially available or running with degraded behavior.
     Degraded {
         /// Bound endpoint associated with this lifecycle state.
         endpoint: Option<BoundEndpoint>,

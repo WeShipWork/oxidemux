@@ -62,7 +62,7 @@ pub struct ProviderExecutionResult {
 pub enum ProviderExecutionOutcome {
     /// Provider execution completed successfully.
     Success(ResponseMode),
-    /// Operation completed or state exists with degraded quality.
+    /// Provider execution completed with reduced quality or capability.
     Degraded {
         /// Complete or streaming response mode for this outcome.
         response_mode: ResponseMode,
@@ -79,7 +79,7 @@ pub enum ProviderExecutionOutcome {
 }
 
 impl ProviderExecutionOutcome {
-    /// Handles response mode for this public contract.
+    /// Returns the response mode carried by this provider execution outcome.
     pub fn response_mode(&self) -> &ResponseMode {
         match self {
             Self::Success(response_mode)
@@ -405,7 +405,7 @@ pub enum MockProviderOutcome {
         /// Whether this capability or outcome supports streaming responses.
         supports_streaming: bool,
     },
-    /// Operation completed or state exists with degraded quality.
+    /// Mock provider returns a degraded response with explicit reasons.
     Degraded {
         /// Canonical response associated with this outcome.
         response: CanonicalProtocolResponse,
