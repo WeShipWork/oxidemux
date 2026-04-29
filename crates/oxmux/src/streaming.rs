@@ -54,7 +54,7 @@ pub struct StreamingResponse {
 }
 
 impl StreamingResponse {
-    /// Creates a validated value for this public contract.
+    /// Creates a streaming response after validating terminal event ordering.
     pub fn new(events: Vec<StreamEvent>) -> Result<Self, CoreError> {
         Self::validate_events(&events)?;
         Ok(Self { events })
@@ -146,7 +146,7 @@ pub struct StreamContent {
 }
 
 impl StreamContent {
-    /// Creates a validated value for this public contract.
+    /// Creates a content event payload for a specific protocol family.
     pub fn new(protocol: ProtocolMetadata, payload: ProtocolPayload) -> Result<Self, CoreError> {
         protocol.validate()?;
         Ok(Self { protocol, payload })
@@ -161,7 +161,7 @@ pub struct StreamMetadata {
 }
 
 impl StreamMetadata {
-    /// Creates a validated value for this public contract.
+    /// Creates a stream metadata entry with non-empty name and value fields.
     pub fn new(name: impl Into<String>, value: impl Into<String>) -> Result<Self, CoreError> {
         let metadata = Self {
             name: name.into(),
@@ -261,7 +261,7 @@ pub struct StreamFailure {
 }
 
 impl StreamFailure {
-    /// Creates a validated value for this public contract.
+    /// Creates a stream failure without provider-specific metadata.
     pub fn new(code: impl Into<String>, message: impl Into<String>) -> Result<Self, CoreError> {
         Self::with_provider_metadata(code, message, None)
     }

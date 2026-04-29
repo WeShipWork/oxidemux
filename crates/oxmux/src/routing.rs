@@ -35,7 +35,7 @@ pub struct RoutingPolicy {
 }
 
 impl RoutingPolicy {
-    /// Creates a validated value for this public contract.
+    /// Creates a routing policy with the supplied model routes and default fallback behavior.
     pub fn new(routes: Vec<ModelRoute>) -> Self {
         Self {
             model_aliases: Vec::new(),
@@ -273,7 +273,7 @@ pub struct ModelAlias {
 }
 
 impl ModelAlias {
-    /// Creates a validated value for this public contract.
+    /// Creates a model route for a resolved model and its ordered target candidates.
     pub fn new(requested_model: impl Into<String>, resolved_model: impl Into<String>) -> Self {
         Self {
             requested_model: requested_model.into(),
@@ -297,7 +297,7 @@ pub struct ModelRoute {
 }
 
 impl ModelRoute {
-    /// Creates a validated value for this public contract.
+    /// Creates a routing candidate for a provider or provider account target.
     pub fn new(resolved_model: impl Into<String>, candidates: Vec<RoutingCandidate>) -> Self {
         Self {
             resolved_model: resolved_model.into(),
@@ -324,7 +324,7 @@ pub struct RoutingCandidate {
 }
 
 impl RoutingCandidate {
-    /// Creates a validated value for this public contract.
+    /// Creates explicit fallback behavior for routing candidate evaluation.
     pub fn new(target: RoutingTarget) -> Self {
         Self { target }
     }
@@ -391,7 +391,7 @@ pub struct FallbackBehavior {
 }
 
 impl FallbackBehavior {
-    /// Fn used by this public contract.
+    /// Creates explicit fallback behavior for routing candidate evaluation.
     pub const fn new(fallback_enabled: bool, allow_degraded: bool) -> Self {
         Self {
             fallback_enabled,
@@ -399,7 +399,7 @@ impl FallbackBehavior {
         }
     }
 
-    /// Fn used by this public contract.
+    /// Returns fallback behavior that stops after the first skipped candidate.
     pub const fn disabled() -> Self {
         Self::new(false, false)
     }
@@ -419,7 +419,7 @@ pub struct RoutingAvailabilitySnapshot {
 }
 
 impl RoutingAvailabilitySnapshot {
-    /// Creates a validated value for this public contract.
+    /// Creates an availability snapshot for the targets known to routing.
     pub fn new(targets: Vec<RoutingTargetAvailability>) -> Self {
         Self { targets }
     }
@@ -469,7 +469,7 @@ pub struct RoutingTargetAvailability {
 }
 
 impl RoutingTargetAvailability {
-    /// Creates a validated value for this public contract.
+    /// Creates a routing target availability entry for one provider or account target.
     pub fn new(target: RoutingTarget, state: RoutingAvailabilityState) -> Self {
         Self { target, state }
     }
@@ -527,7 +527,7 @@ pub struct RoutingSelectionRequest {
 }
 
 impl RoutingSelectionRequest {
-    /// Creates a validated value for this public contract.
+    /// Creates a selection request for a model before aliases and policy defaults are applied.
     pub fn new(requested_model: impl Into<String>) -> Self {
         Self {
             requested_model: requested_model.into(),
