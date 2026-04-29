@@ -24,6 +24,10 @@ run = "cargo clippy --all-targets --all-features -- -D warnings"
 [tasks.test]
 run = "cargo test --all-targets --all-features"
 
+[tasks.doc]
+env = { RUSTDOCFLAGS = "-D warnings" }
+run = "cargo doc --workspace --no-deps"
+
 [tasks.hk-check]
 run = "hk check --all"
 
@@ -43,4 +47,5 @@ run = [
     "mise run check",
     "mise run clippy",
     "mise run test",
+    "mise run doc",
 ]

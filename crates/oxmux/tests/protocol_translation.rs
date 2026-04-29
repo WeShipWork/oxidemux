@@ -1,3 +1,5 @@
+//! Integration tests for protocol translation boundaries.
+
 use oxmux::{
     CanonicalProtocolRequest, CanonicalProtocolResponse, CodexProtocolMetadata, CoreError,
     OpenAiProtocolMetadata, ProtocolBoundary, ProtocolFamily, ProtocolMetadata, ProtocolPayload,

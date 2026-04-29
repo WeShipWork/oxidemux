@@ -1,3 +1,5 @@
+//! Integration tests for the oxmux dependency boundary.
+
 use std::fs;
 
 #[test]

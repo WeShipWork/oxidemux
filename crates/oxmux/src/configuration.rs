@@ -1,7 +1,15 @@
+//! Configuration contracts for the headless core.
+//!
+//! This module exposes validated file-backed and layered configuration state used
+//! by `oxmux` consumers and management snapshots. It describes core proxy
+//! configuration data without owning desktop presentation or platform secret
+//! storage behavior.
+
 mod file;
 mod raw;
 mod validation;
 
+/// Re-exports validated file-backed and layered configuration API types.
 pub use file::{
     AutoStartIntent, ConfigurationBoundary, ConfigurationFingerprint, ConfigurationLayerKind,
     ConfigurationLayerSource, ConfigurationLoadFailure, ConfigurationSnapshot,

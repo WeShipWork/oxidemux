@@ -1,3 +1,5 @@
+//! Integration tests for the local loopback runtime.
+
 use std::io::{Read, Write};
 use std::net::{IpAddr, Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::sync::Arc;
