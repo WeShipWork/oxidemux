@@ -6,7 +6,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use oxmux::{
     AutoStartIntent, ConfigurationBoundary, ConfigurationErrorKind, ConfigurationSourceMetadata,
-    CoreError, FileConfigurationState, InvalidConfigurationValue, LoggingSetting,
+    CoreError, FileConfigurationState, InvalidConfigurationValue, LayeredConfigurationInput,
+    LayeredConfigurationReloadOutcome, LayeredConfigurationState, LoggingSetting,
     ManagementSnapshot, ProtocolFamily, QuotaState, RoutingTarget, ValidatedFileConfiguration,
 };
 
@@ -375,6 +376,370 @@ fn fixture_error_cases_cover_schema_and_reference_failures() {
         "providers[0].accounts[0].credential-reference",
         InvalidConfigurationValue::SecretLike,
     );
+}
+
+#[test]
+fn layered_defaults_fill_missing_user_fields_and_user_scalars_override()
+-> Result<(), Box<dyn Error>> {
+    let mut state = LayeredConfigurationState::new();
+    let user = r#"
+[proxy]
+port = 9797
+
+[observability]
+usage-collection = false
+
+[lifecycle]
+auto-start = "enabled"
+"#;
+
+    let outcome = state.replace(vec![
+        LayeredConfigurationInput::bundled_defaults(VALID_TOML),
+        LayeredConfigurationInput::user_owned(
+            user,
+            ConfigurationSourceMetadata::for_path("user.toml"),
+        ),
+    ]);
+
+    assert!(matches!(
+        outcome,
+        LayeredConfigurationReloadOutcome::Replaced { .. }
+    ));
+    let Some(active) = state.active() else {
+        return Err("expected active layered configuration".into());
+    };
+    assert_eq!(
+        active.configuration.proxy.listen_address,
+        IpAddr::V4(Ipv4Addr::LOCALHOST)
+    );
+    assert_eq!(active.configuration.proxy.port, 9797);
+    assert!(!active.configuration.usage_collection_enabled);
+    assert_eq!(active.configuration.auto_start, AutoStartIntent::Enabled);
+    assert_eq!(active.configuration.providers.len(), 2);
+    Ok(())
+}
+
+#[test]
+fn layered_provider_accounts_merge_deterministically_and_routes_replace()
+-> Result<(), Box<dyn Error>> {
+    let mut state = LayeredConfigurationState::new();
+    let user = r#"
+[[providers]]
+id = "mock-openai"
+protocol-family = "openai"
+routing-eligible = true
+
+[[providers.accounts]]
+id = "secondary"
+credential-reference = "mock-openai/secondary"
+
+[[providers]]
+id = "mock-gemini"
+protocol-family = "gemini"
+routing-eligible = true
+
+[[providers.accounts]]
+id = "default"
+credential-reference = "mock-gemini/default"
+
+[[routing.defaults]]
+name = "chat"
+model = "gemini-1.5-pro"
+provider-id = "mock-gemini"
+account-id = "default"
+fallback-enabled = false
+"#;
+
+    let outcome = state.replace(vec![
+        LayeredConfigurationInput::bundled_defaults(VALID_TOML),
+        LayeredConfigurationInput::user_owned(
+            user,
+            ConfigurationSourceMetadata::for_path("user.toml"),
+        ),
+    ]);
+
+    assert!(matches!(
+        outcome,
+        LayeredConfigurationReloadOutcome::Replaced { .. }
+    ));
+    let configuration = &state
+        .active()
+        .ok_or("expected active layered configuration")?
+        .configuration;
+    assert_eq!(configuration.providers.len(), 3);
+    assert_eq!(configuration.providers[0].id, "mock-claude");
+    assert_eq!(configuration.providers[1].id, "mock-gemini");
+    assert_eq!(configuration.providers[2].id, "mock-openai");
+    assert_eq!(configuration.providers[2].accounts.len(), 2);
+    assert_eq!(configuration.providers[2].accounts[0].id, "default");
+    assert_eq!(configuration.providers[2].accounts[1].id, "secondary");
+    assert_eq!(configuration.routing_defaults.len(), 1);
+    assert_eq!(configuration.routing_defaults[0].model, "gemini-1.5-pro");
+    assert_eq!(
+        configuration.routing_defaults[0].target,
+        RoutingTarget::provider_account("mock-gemini", "default")
+    );
+    Ok(())
+}
+
+#[test]
+fn layered_rejected_candidates_preserve_prior_active_configuration() -> Result<(), Box<dyn Error>> {
+    let mut state = LayeredConfigurationState::new();
+    let first = state.replace(vec![LayeredConfigurationInput::bundled_defaults(
+        VALID_TOML,
+    )]);
+    let active_fingerprint = match first {
+        LayeredConfigurationReloadOutcome::Replaced {
+            active_fingerprint, ..
+        } => active_fingerprint,
+        other => return Err(format!("expected replaced outcome, got {other:?}").into()),
+    };
+    let active_before_failure = state.active().ok_or("expected active config")?.clone();
+
+    let invalid = r#"
+[proxy]
+listen-address = "8.8.8.8"
+"#;
+    let outcome = state.replace(vec![
+        LayeredConfigurationInput::bundled_defaults(VALID_TOML),
+        LayeredConfigurationInput::user_owned(
+            invalid,
+            ConfigurationSourceMetadata::for_path("broken.toml"),
+        ),
+    ]);
+
+    let LayeredConfigurationReloadOutcome::Rejected(rejected) = outcome else {
+        return Err("expected rejected outcome".into());
+    };
+    assert_eq!(
+        rejected.previous_active_fingerprint,
+        Some(active_fingerprint)
+    );
+    assert!(rejected.errors.iter().any(|error| {
+        error.kind == ConfigurationErrorKind::InvalidListenAddress
+            && error.field_path == "proxy.listen-address"
+    }));
+    assert_eq!(state.active(), Some(&active_before_failure));
+    assert!(state.failed_candidate().is_some());
+    Ok(())
+}
+
+#[test]
+fn layered_equivalent_runtime_fingerprint_returns_unchanged() -> Result<(), Box<dyn Error>> {
+    let mut state = LayeredConfigurationState::new();
+    let first = state.replace(vec![LayeredConfigurationInput::bundled_defaults(
+        VALID_TOML,
+    )]);
+    let active_fingerprint = match first {
+        LayeredConfigurationReloadOutcome::Replaced {
+            active_fingerprint, ..
+        } => active_fingerprint,
+        other => return Err(format!("expected replaced outcome, got {other:?}").into()),
+    };
+
+    let reformatted =
+        format!("# comments and whitespace do not affect effective runtime\n\n{VALID_TOML}\n");
+    let second = state.replace(vec![LayeredConfigurationInput::bundled_defaults(
+        reformatted,
+    )]);
+
+    assert_eq!(
+        second,
+        LayeredConfigurationReloadOutcome::Unchanged {
+            active_fingerprint,
+            sources: vec![oxmux::ConfigurationLayerSource {
+                kind: oxmux::ConfigurationLayerKind::BundledDefaults,
+                source: ConfigurationSourceMetadata::memory(),
+            }],
+        }
+    );
+    Ok(())
+}
+
+#[test]
+fn layered_management_snapshot_exposes_metadata_and_clears_failed_candidate()
+-> Result<(), Box<dyn Error>> {
+    let mut state = LayeredConfigurationState::new();
+    state.replace(vec![LayeredConfigurationInput::bundled_defaults(
+        VALID_TOML,
+    )]);
+    state.replace(vec![
+        LayeredConfigurationInput::bundled_defaults(VALID_TOML),
+        LayeredConfigurationInput::user_owned(
+            "[proxy]\nlisten-address = \"8.8.8.8\"\n",
+            ConfigurationSourceMetadata::for_path("broken.toml"),
+        ),
+    ]);
+
+    let failed_snapshot = ManagementSnapshot::from_layered_configuration_state(&state);
+    assert!(failed_snapshot.layered_configuration.is_some());
+    assert!(failed_snapshot.last_layered_configuration_failure.is_some());
+    assert_eq!(failed_snapshot.configuration.port, 8787);
+    assert!(
+        failed_snapshot
+            .errors
+            .iter()
+            .any(|error| matches!(error, CoreError::Configuration { .. }))
+    );
+
+    state.replace(vec![
+        LayeredConfigurationInput::bundled_defaults(VALID_TOML),
+        LayeredConfigurationInput::user_owned(
+            "[proxy]\nport = 9797\n",
+            ConfigurationSourceMetadata::for_path("user.toml"),
+        ),
+    ]);
+    let successful_snapshot = ManagementSnapshot::from_layered_configuration_state(&state);
+    let layered = successful_snapshot
+        .layered_configuration
+        .ok_or("expected layered metadata")?;
+    assert_eq!(successful_snapshot.configuration.port, 9797);
+    assert_eq!(layered.sources.len(), 2);
+    assert!(
+        successful_snapshot
+            .last_layered_configuration_failure
+            .is_none()
+    );
+    assert!(successful_snapshot.errors.is_empty());
+    assert!(matches!(
+        successful_snapshot.providers[0].accounts[0].auth_state,
+        oxmux::AuthState::CredentialReference { .. }
+    ));
+    assert_eq!(
+        successful_snapshot.providers[0].accounts[0].quota_state,
+        QuotaState::Unknown
+    );
+    Ok(())
+}
+
+#[test]
+fn layered_credential_reference_changes_replace_without_leaking_management_values()
+-> Result<(), Box<dyn Error>> {
+    let mut state = LayeredConfigurationState::new();
+    let first = state.replace(vec![LayeredConfigurationInput::bundled_defaults(
+        VALID_TOML,
+    )]);
+    assert!(matches!(
+        first,
+        LayeredConfigurationReloadOutcome::Replaced { .. }
+    ));
+
+    let changed_credential = with_replace(
+        "credential-reference = \"mock-openai/default\"",
+        "credential-reference = \"mock-openai/rotated\"",
+    );
+    let second = state.replace(vec![LayeredConfigurationInput::bundled_defaults(
+        changed_credential,
+    )]);
+    assert!(matches!(
+        second,
+        LayeredConfigurationReloadOutcome::Replaced { .. }
+    ));
+
+    let snapshot = ManagementSnapshot::from_layered_configuration_state(&state);
+    assert!(format!("{snapshot:?}").contains("configured"));
+    assert!(!format!("{snapshot:?}").contains("mock-openai/rotated"));
+    Ok(())
+}
+
+#[test]
+fn initial_invalid_layered_load_has_no_active_configuration() {
+    let mut state = LayeredConfigurationState::new();
+    let outcome = state.replace(vec![LayeredConfigurationInput::bundled_defaults(
+        "version = 1\n[proxy]\nlisten-address = \"8.8.8.8\"\nport = 8787\n",
+    )]);
+
+    assert!(matches!(
+        outcome,
+        LayeredConfigurationReloadOutcome::Rejected(_)
+    ));
+    assert!(state.active().is_none());
+    assert!(state.failed_candidate().is_some());
+}
+
+#[test]
+fn layered_parse_rejects_unknown_fields_with_source_metadata() -> Result<(), Box<dyn Error>> {
+    let mut state = LayeredConfigurationState::new();
+    let outcome = state.replace(vec![LayeredConfigurationInput::user_owned(
+        "version = 1\nunknown-field = true\n",
+        ConfigurationSourceMetadata::for_path("unknown.toml"),
+    )]);
+
+    let LayeredConfigurationReloadOutcome::Rejected(rejected) = outcome else {
+        return Err("expected rejected outcome".into());
+    };
+    assert!(rejected.errors.iter().any(|error| {
+        error.kind == ConfigurationErrorKind::UnknownField
+            && error
+                .source
+                .as_ref()
+                .is_some_and(|source| source.description == "unknown.toml")
+    }));
+    assert!(state.active().is_none());
+    Ok(())
+}
+
+#[test]
+fn layered_secret_like_credentials_are_rejected() -> Result<(), Box<dyn Error>> {
+    let mut state = LayeredConfigurationState::new();
+    let secret_like = with_replace(
+        "credential-reference = \"mock-openai/default\"",
+        "credential-reference = \"sk-secret-token\"",
+    );
+    let outcome = state.replace(vec![LayeredConfigurationInput::bundled_defaults(
+        secret_like,
+    )]);
+
+    let LayeredConfigurationReloadOutcome::Rejected(rejected) = outcome else {
+        return Err("expected rejected outcome".into());
+    };
+    assert!(rejected.errors.iter().any(|error| {
+        error.kind == ConfigurationErrorKind::InvalidCredentialReference
+            && error.invalid_value == InvalidConfigurationValue::SecretLike
+    }));
+    assert!(state.active().is_none());
+    Ok(())
+}
+
+#[test]
+fn unchanged_layered_reload_preserves_failed_candidate_diagnostics() -> Result<(), Box<dyn Error>> {
+    let mut state = LayeredConfigurationState::new();
+    state.replace(vec![LayeredConfigurationInput::bundled_defaults(
+        VALID_TOML,
+    )]);
+    state.replace(vec![
+        LayeredConfigurationInput::bundled_defaults(VALID_TOML),
+        LayeredConfigurationInput::user_owned(
+            "[proxy]\nlisten-address = \"8.8.8.8\"\n",
+            ConfigurationSourceMetadata::for_path("broken.toml"),
+        ),
+    ]);
+    let failure_before = state.failed_candidate().cloned();
+
+    let outcome = state.replace(vec![LayeredConfigurationInput::bundled_defaults(
+        VALID_TOML,
+    )]);
+    assert!(matches!(
+        outcome,
+        LayeredConfigurationReloadOutcome::Unchanged { .. }
+    ));
+    assert_eq!(state.failed_candidate(), failure_before.as_ref());
+    Ok(())
+}
+
+#[test]
+fn oxmux_dependency_boundary_remains_headless() -> Result<(), Box<dyn Error>> {
+    let manifest =
+        fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml"))?;
+    for forbidden in [
+        "gpui", "notify", "keyring", "oauth", "reqwest", "sqlx", "rusqlite", "sled",
+    ] {
+        assert!(
+            !manifest.contains(forbidden),
+            "oxmux should not depend on {forbidden} for layered configuration"
+        );
+    }
+    Ok(())
 }
 
 fn assert_error_kind<T>(
