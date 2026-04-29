@@ -1,3 +1,5 @@
+//! Integration tests for direct oxmux facade use.
+
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
