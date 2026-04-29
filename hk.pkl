@@ -135,7 +135,7 @@ local quality_steps = new Mapping<String, Step> {
     }
     ["openspec-validate"] {
         glob = List("openspec/**/*.md", "openspec/**/*.yaml", "openspec/**/*.yml")
-        check = "scripts/quiet-on-success.sh openspec validate --all --strict"
+        check = "scripts/quiet-on-success.sh mise run openspec-validate-all"
     }
 }
 

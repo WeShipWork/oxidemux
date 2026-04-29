@@ -55,6 +55,9 @@ run = "hk run pre-commit"
 [tasks.openspec-validate]
 run = "scripts/ci/validate-openspec-pr.sh"
 
+[tasks.openspec-validate-all]
+run = "mise exec npm:openspec@0.0.0 -- openspec validate --all --strict"
+
 [tasks.ci]
 run = [
     "mise run rust-components",
