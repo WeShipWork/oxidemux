@@ -111,21 +111,31 @@ local quality_steps = new Mapping<String, Step> {
         exclude = generated_excludes
         check = "sh -c 'rumdl check --no-cache --diff README.md' sh"
     }
-    ["cargo-fmt"] {
-        glob = List("*.rs")
-        check = "scripts/quiet-on-success.sh cargo fmt --all -- --check"
+    ["mise-ci"] {
+        glob = List(
+            "*.rs",
+            "Cargo.toml",
+            "Cargo.lock",
+            "mise.toml",
+            "rust-toolchain.toml",
+        )
+        check = "scripts/quiet-on-success.sh mise run ci"
     }
-    ["cargo-check"] {
-        glob = List("*.rs", "Cargo.toml", "Cargo.lock")
-        check = "scripts/quiet-on-success.sh cargo check --all-targets --all-features"
+    ["mise-security"] {
+        glob = List(
+            "Cargo.toml",
+            "Cargo.lock",
+            "mise.toml",
+            "deny.toml",
+            "hk.pkl",
+            ".github/workflows/*.yml",
+            ".github/workflows/*.yaml",
+        )
+        check = "scripts/quiet-on-success.sh mise run security"
     }
-    ["cargo-clippy"] {
-        glob = List("*.rs", "Cargo.toml", "Cargo.lock")
-        check = "scripts/quiet-on-success.sh cargo clippy --all-targets --all-features -- -D warnings"
-    }
-    ["cargo-test"] {
-        glob = List("*.rs", "Cargo.toml", "Cargo.lock")
-        check = "scripts/quiet-on-success.sh cargo test --all-targets --all-features"
+    ["openspec-validate"] {
+        glob = List("openspec/**/*.md", "openspec/**/*.yaml", "openspec/**/*.yml")
+        check = "scripts/quiet-on-success.sh mise run openspec-validate-all"
     }
 }
 

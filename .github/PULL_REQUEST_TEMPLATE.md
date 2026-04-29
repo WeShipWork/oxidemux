@@ -52,6 +52,7 @@ Please confirm that you have followed these guidelines.
 - [ ] My pull request is focused on a single project or change.
 - [ ] I preserved the `oxmux` shared-core and `oxidemux` platform-shell boundary, or documented the OpenSpec-approved reason for changing it.
 - [ ] I ran `mise run ci` locally, or explained why it was not applicable.
+- [ ] I ran `mise run security` locally for dependency policy and vulnerability changes, or explained why it was not applicable.
 - [ ] I ran relevant hk checks with `mise run hk-check`, or explained why they were not applicable.
 
 ## 💬 Additional Comments

@@ -31,4 +31,5 @@ as release boundaries become established.
 
 ### Security
 
-- N/A
+- Added mise-backed `cargo-deny` and `cargo-audit` verification with an initial
+  repository supply-chain policy.
