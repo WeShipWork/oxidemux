@@ -1,3 +1,9 @@
+//! Local loopback runtime contracts for health and minimal proxy serving.
+//!
+//! The runtime exposes a small synchronous loopback server used by headless tests
+//! and bootstrap management state. It does not describe desktop lifecycle, tray,
+//! updater, or platform credential behavior.
+
 use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream};
 use std::sync::Arc;
@@ -12,7 +18,9 @@ use crate::{
     RoutingPolicy, UptimeMetadata, UsageSummary, core_identity,
 };
 
+/// L o c a l h e a l t h p a t h used by this public contract.
 pub const LOCAL_HEALTH_PATH: &str = "/health";
+/// L o c a l h e a l t h r e s p o n s e b o d y used by this public contract.
 pub const LOCAL_HEALTH_RESPONSE_BODY: &str = "oxmux local health runtime: healthy\n";
 #[cfg(test)]
 const MAX_LOCAL_HEALTH_REQUEST_BYTES: usize = 8 * 1024;
@@ -20,12 +28,16 @@ const MAX_LOCAL_PROXY_REQUEST_BYTES: usize = 64 * 1024;
 const LOCAL_CHAT_COMPLETIONS_PATH: &str = crate::MINIMAL_CHAT_COMPLETIONS_PATH;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Loopback listen configuration for the local health runtime.
 pub struct LocalHealthRuntimeConfig {
+    /// Loopback listen address used by local proxy/runtime configuration.
     pub listen_address: IpAddr,
+    /// TCP port used by local proxy/runtime configuration.
     pub port: u16,
 }
 
 impl LocalHealthRuntimeConfig {
+    /// Creates a validated value for this public contract.
     pub fn new(listen_address: IpAddr, port: u16) -> Result<Self, CoreError> {
         let config = Self {
             listen_address,
@@ -35,6 +47,7 @@ impl LocalHealthRuntimeConfig {
         Ok(config)
     }
 
+    /// Creates loopback runtime configuration for a port.
     pub fn loopback(port: u16) -> Self {
         Self {
             listen_address: IpAddr::from([127, 0, 0, 1]),
@@ -42,10 +55,12 @@ impl LocalHealthRuntimeConfig {
         }
     }
 
+    /// Returns the socket address represented by this runtime configuration.
     pub fn socket_addr(self) -> SocketAddr {
         SocketAddr::new(self.listen_address, self.port)
     }
 
+    /// Validates this value and returns a structured core error on failure.
     pub fn validate(&self) -> Result<(), CoreError> {
         if !self.listen_address.is_loopback() {
             return Err(CoreError::LocalRuntimeConfiguration {
@@ -59,13 +74,18 @@ impl LocalHealthRuntimeConfig {
 }
 
 #[derive(Clone)]
+/// Routing and provider execution configuration for the local proxy route.
 pub struct LocalProxyRouteConfig {
+    /// Routing policy used by the minimal proxy route.
     pub routing_policy: RoutingPolicy,
+    /// Target availability used by the minimal proxy route.
     pub availability: RoutingAvailabilitySnapshot,
+    /// Provider executor used by the minimal proxy route.
     pub provider_executor: Arc<dyn ProviderExecutor + Send + Sync>,
 }
 
 impl LocalProxyRouteConfig {
+    /// Creates a validated value for this public contract.
     pub fn new(
         routing_policy: RoutingPolicy,
         availability: RoutingAvailabilitySnapshot,
@@ -80,13 +100,18 @@ impl LocalProxyRouteConfig {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Current lifecycle, health, and endpoint state for the local runtime.
 pub struct LocalHealthRuntimeStatus {
+    /// Current local proxy lifecycle state.
     pub lifecycle: ProxyLifecycleState,
+    /// Current core health state.
     pub health: CoreHealthState,
+    /// Bound endpoint associated with this lifecycle state.
     pub endpoint: Option<BoundEndpoint>,
 }
 
 impl LocalHealthRuntimeStatus {
+    /// Creates status for a runtime that is starting.
     pub fn starting() -> Self {
         Self {
             lifecycle: ProxyLifecycleState::Starting,
@@ -95,6 +120,7 @@ impl LocalHealthRuntimeStatus {
         }
     }
 
+    /// Creates status for a runtime failure.
     pub fn failed(error: CoreError) -> Self {
         Self {
             lifecycle: ProxyLifecycleState::Failed {
@@ -105,6 +131,7 @@ impl LocalHealthRuntimeStatus {
         }
     }
 
+    /// Creates status for a stopped runtime.
     pub fn stopped(endpoint: Option<BoundEndpoint>) -> Self {
         Self {
             lifecycle: ProxyLifecycleState::Stopped,
@@ -113,6 +140,7 @@ impl LocalHealthRuntimeStatus {
         }
     }
 
+    /// Builds a management snapshot from current runtime state.
     pub fn management_snapshot(&self, configuration: ConfigurationSnapshot) -> ManagementSnapshot {
         let errors = match &self.lifecycle {
             ProxyLifecycleState::Failed { last_error } => vec![last_error.clone()],
@@ -137,6 +165,7 @@ impl LocalHealthRuntimeStatus {
     }
 }
 
+/// Synchronous loopback runtime serving health and optional minimal proxy requests.
 pub struct LocalHealthRuntime {
     config: LocalHealthRuntimeConfig,
     endpoint: BoundEndpoint,
@@ -160,10 +189,12 @@ impl std::fmt::Debug for LocalHealthRuntime {
 }
 
 impl LocalHealthRuntime {
+    /// Starts the local health runtime without a proxy route.
     pub fn start(config: LocalHealthRuntimeConfig) -> Result<Self, CoreError> {
         Self::start_inner(config, None)
     }
 
+    /// Starts the local runtime with health and minimal proxy routes.
     pub fn start_with_proxy_route(
         config: LocalHealthRuntimeConfig,
         proxy_route: LocalProxyRouteConfig,
@@ -228,14 +259,17 @@ impl LocalHealthRuntime {
         })
     }
 
+    /// Returns the runtime configuration.
     pub fn config(&self) -> LocalHealthRuntimeConfig {
         self.config
     }
 
+    /// Returns the endpoint currently bound by the runtime.
     pub fn bound_endpoint(&self) -> BoundEndpoint {
         self.endpoint
     }
 
+    /// Returns current runtime status.
     pub fn status(&self) -> LocalHealthRuntimeStatus {
         match &self.worker {
             Some(worker) if worker.is_finished() => {
@@ -258,6 +292,7 @@ impl LocalHealthRuntime {
         }
     }
 
+    /// Builds a management snapshot from current runtime state.
     pub fn management_snapshot(&self) -> ManagementSnapshot {
         self.status().management_snapshot(ConfigurationSnapshot {
             listen_address: self.config.listen_address,
@@ -270,6 +305,7 @@ impl LocalHealthRuntime {
         })
     }
 
+    /// Requests runtime shutdown and returns the final status.
     pub fn shutdown(&mut self) -> Result<LocalHealthRuntimeStatus, CoreError> {
         self.shutdown_requested.store(true, Ordering::Relaxed);
 
