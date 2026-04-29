@@ -20,7 +20,7 @@ fn valid_toml_loads_typed_configuration() -> Result<(), Box<dyn Error>> {
         configuration.proxy.listen_address,
         IpAddr::V4(Ipv4Addr::LOCALHOST)
     );
-    assert_eq!(configuration.proxy.port, 0);
+    assert_eq!(configuration.proxy.port, 8787);
     assert_eq!(configuration.providers.len(), 2);
     assert_eq!(configuration.providers[0].id, "mock-openai");
     assert_eq!(
@@ -104,7 +104,12 @@ fn validation_reports_structured_semantic_errors() {
             "proxy.listen-address",
         ),
         (
-            with_replace("port = 0", "port = 70000"),
+            with_replace("port = 8787", "port = 0"),
+            ConfigurationErrorKind::InvalidPort,
+            "proxy.port",
+        ),
+        (
+            with_replace("port = 8787", "port = 70000"),
             ConfigurationErrorKind::InvalidPort,
             "proxy.port",
         ),
@@ -210,7 +215,7 @@ fn management_snapshot_reflects_valid_file_configuration_without_verified_health
         return Err("expected active file configuration".into());
     };
 
-    assert_eq!(snapshot.configuration.port, 0);
+    assert_eq!(snapshot.configuration.port, 8787);
     assert_eq!(
         file_configuration.source.description,
         "/tmp/oxidemux/config.toml"
@@ -267,7 +272,7 @@ fn replacement_hooks_preserve_last_valid_state_and_clear_failure_metadata()
     assert_eq!(state.active(), Some(&active_before_failure));
     assert!(state.last_failure().is_some());
 
-    state.replace_from_contents(&with_replace("port = 0", "port = 8788"))?;
+    state.replace_from_contents(&with_replace("port = 8787", "port = 8788"))?;
     let snapshot = ManagementSnapshot::from_file_configuration_state(&state);
     assert_eq!(snapshot.configuration.port, 8788);
     assert!(snapshot.last_configuration_load_failure.is_none());
@@ -364,7 +369,7 @@ fn fixture_error_cases_cover_schema_and_reference_failures() {
     assert_error_value(
         ValidatedFileConfiguration::load_contents(&with_replace(
             "credential-reference = \"mock-openai/default\"",
-            "credential-reference = \"secret-token\"",
+            "credential-reference = \"mock-openai/api_key\"",
         )),
         ConfigurationErrorKind::InvalidCredentialReference,
         "providers[0].accounts[0].credential-reference",

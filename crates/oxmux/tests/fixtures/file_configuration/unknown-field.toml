@@ -2,7 +2,7 @@ version = 1
 
 [proxy]
 listen-address = "127.0.0.1"
-port = 0
+port = 8787
 
 [[providers]]
 id = "mock-openai"

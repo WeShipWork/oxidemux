@@ -140,7 +140,7 @@ fn validate_proxy(
     };
 
     let port = match raw.port {
-        Some(value) if (0..=u16::MAX as i64).contains(&value) => Some(value as u16),
+        Some(value) if (1..=u16::MAX as i64).contains(&value) => Some(value as u16),
         Some(_) => {
             errors.push(error(
                 ConfigurationErrorKind::InvalidPort,
@@ -639,6 +639,7 @@ fn validate_credential_reference(value: &str) -> CredentialReferenceValidation {
     if lower.contains("secret")
         || lower.contains("token")
         || lower.contains("api-key")
+        || lower.contains("api_key")
         || lower.starts_with("sk-")
     {
         return CredentialReferenceValidation::SecretLike;

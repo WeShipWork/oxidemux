@@ -14,7 +14,7 @@ version = 1
 
 [proxy]
 listen-address = "127.0.0.1"
-port = 0
+port = 8787
 
 [[providers]]
 id = "mock-openai"
@@ -40,7 +40,7 @@ usage-collection = true
 auto-start = "disabled"
 ```
 
-Accepted `protocol-family` values SHALL match protocol-family metadata already represented by `oxmux` protocol/routing/provider primitives. Accepted `logging` values SHALL be `off`, `standard`, or `verbose`. Accepted `auto-start` values SHALL be `disabled` or `enabled`. `usage-collection` SHALL be a boolean. `port = 0` SHALL mean caller permits the local runtime to bind an available loopback port; non-zero ports SHALL be within the accepted TCP port range. `proxy.listen-address` SHALL be a loopback IP literal for this change, such as `127.0.0.1` or `::1`; wildcard, unspecified, multicast, link-local, and public interface addresses SHALL be rejected.
+Accepted `protocol-family` values SHALL match protocol-family metadata already represented by `oxmux` protocol/routing/provider primitives. Accepted `logging` values SHALL be `off`, `standard`, or `verbose`. Accepted `auto-start` values SHALL be `disabled` or `enabled`. `usage-collection` SHALL be a boolean. `proxy.port` SHALL be a non-zero TCP port within the accepted TCP port range; `port = 0` SHALL be rejected for file-backed configuration so user-owned files do not publish an unpredictable ephemeral bind port. `proxy.listen-address` SHALL be a loopback IP literal for this change, such as `127.0.0.1` or `::1`; wildcard, unspecified, multicast, link-local, and public interface addresses SHALL be rejected.
 
 `credential-reference` SHALL be an opaque non-secret pointer that lets later credential adapters find account material outside this file-backed core contract. The TOML schema and examples SHALL NOT contain raw tokens, API keys, OAuth refresh tokens, cookies, or platform secret-store payloads. Management snapshots and structured errors SHALL expose whether a credential reference is present and valid, but SHALL NOT echo credential-reference values or secret-like account material.
 
