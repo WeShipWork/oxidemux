@@ -10,11 +10,14 @@ pub mod streaming;
 pub mod usage;
 
 pub use configuration::{
-    AutoStartIntent, ConfigurationBoundary, ConfigurationLoadFailure, ConfigurationSnapshot,
+    AutoStartIntent, ConfigurationBoundary, ConfigurationFingerprint, ConfigurationLayerKind,
+    ConfigurationLayerSource, ConfigurationLoadFailure, ConfigurationSnapshot,
     ConfigurationUpdateIntent, FileAccountConfiguration, FileBackedManagementConfiguration,
     FileConfigurationState, FileProviderConfiguration, FileProxyConfiguration,
-    FileRoutingDefaultConfiguration, FileRoutingDefaultGroup, LoggingSetting, RoutingDefault,
-    ValidatedConfigurationUpdate, ValidatedFileConfiguration,
+    FileRoutingDefaultConfiguration, FileRoutingDefaultGroup, LayeredConfigurationInput,
+    LayeredConfigurationRejectedCandidate, LayeredConfigurationReloadOutcome,
+    LayeredConfigurationState, LoggingSetting, RoutingDefault, ValidatedConfigurationUpdate,
+    ValidatedFileConfiguration, ValidatedLayeredConfiguration,
 };
 pub use errors::{
     ConfigurationError, ConfigurationErrorKind, ConfigurationSourceMetadata, CoreError,
@@ -25,8 +28,8 @@ pub use local_proxy_runtime::{
     LocalHealthRuntimeStatus, LocalProxyRouteConfig,
 };
 pub use management::{
-    BoundEndpoint, CoreHealthState, LifecycleControlIntent, ManagementSnapshot,
-    ProxyLifecycleState, UptimeMetadata,
+    BoundEndpoint, CoreHealthState, LayeredManagementConfiguration, LifecycleControlIntent,
+    ManagementSnapshot, ProxyLifecycleState, UptimeMetadata,
 };
 pub use minimal_proxy::{
     MAX_MINIMAL_PROXY_BODY_BYTES, MINIMAL_CHAT_COMPLETIONS_PATH, MINIMAL_PROXY_JSON_CONTENT_TYPE,

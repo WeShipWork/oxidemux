@@ -3,9 +3,12 @@ mod raw;
 mod validation;
 
 pub use file::{
-    AutoStartIntent, ConfigurationBoundary, ConfigurationLoadFailure, ConfigurationSnapshot,
+    AutoStartIntent, ConfigurationBoundary, ConfigurationFingerprint, ConfigurationLayerKind,
+    ConfigurationLayerSource, ConfigurationLoadFailure, ConfigurationSnapshot,
     ConfigurationUpdateIntent, FileAccountConfiguration, FileBackedManagementConfiguration,
     FileConfigurationState, FileProviderConfiguration, FileProxyConfiguration,
-    FileRoutingDefaultConfiguration, FileRoutingDefaultGroup, LoggingSetting, RoutingDefault,
-    ValidatedConfigurationUpdate, ValidatedFileConfiguration,
+    FileRoutingDefaultConfiguration, FileRoutingDefaultGroup, LayeredConfigurationInput,
+    LayeredConfigurationRejectedCandidate, LayeredConfigurationReloadOutcome,
+    LayeredConfigurationState, LoggingSetting, RoutingDefault, ValidatedConfigurationUpdate,
+    ValidatedFileConfiguration, ValidatedLayeredConfiguration,
 };
