@@ -96,6 +96,10 @@ native app while remaining testable through a shared headless core.
 - `rust-toolchain.toml`: Pinned Rust 1.95.0 toolchain.
 - `LICENSE-MIT` and `LICENSE-APACHE`: Dual-license files.
 - `.github/workflows/ci.yml`: Multi-platform verification workflow.
+- `.github/workflows/security.yml`: Mise-backed dependency policy and
+  vulnerability verification workflow.
+- `deny.toml`: Reviewable cargo-deny supply-chain policy for advisories,
+  licenses, duplicate dependencies, registries, and git sources.
 - `CONTRIBUTING.md`: Contributor setup, OpenSpec workflow, and PR hygiene
   guidance.
 - `CHANGELOG.md`: Notable project changes following Keep a Changelog format.
@@ -139,13 +143,22 @@ mise run hk-install
 
 # Run quality checks
 mise run ci
+mise run security
 mise run hk-check
 ```
 
-The `mise run ci` task runs workspace-wide formatting, checking, clippy, and
-tests across both `oxmux` and `oxidemux`. The `mise run hk-check` task runs the
-repository hook checks without requiring contributors to remember the underlying
-hk command.
+The `mise run ci` task runs workspace-wide formatting, checking, clippy,
+tests, and documentation checks across both `oxmux` and `oxidemux`. The
+`mise run security` task runs dependency policy and vulnerability checks through
+`mise run deny` and `mise run audit`; add any required advisory, license,
+duplicate dependency, registry, or git-source exceptions to `deny.toml` with a
+reviewable reason rather than bypassing them in CI shell commands. The
+`mise run hk-check` task runs the repository hook checks without requiring
+contributors to remember the underlying hk command.
+
+Release publishing workflows, crates.io token handling, automated GitHub release
+creation, and blocking `cargo-vet` gates are intentionally deferred until a
+later usable-product milestone defines distribution ownership and audit policy.
 
 See `CONTRIBUTING.md` for the OpenSpec-first development workflow, PR template
 expectations, and the reason CI uses the same mise task graph as local
