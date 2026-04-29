@@ -1,3 +1,5 @@
+//! Integration tests for the minimal proxy engine.
+
 use std::cell::RefCell;
 
 use oxmux::{

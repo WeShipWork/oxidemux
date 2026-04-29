@@ -1,3 +1,5 @@
+//! Integration tests for file-backed oxmux configuration.
+
 use std::error::Error;
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr};
