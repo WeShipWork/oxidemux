@@ -23,7 +23,7 @@ pub struct ConfigurationError {
 }
 
 impl ConfigurationError {
-    /// Creates a validated value for this public contract.
+    /// Creates a configuration diagnostic without an additional human-readable message.
     pub fn new(
         kind: ConfigurationErrorKind,
         field_path: impl Into<String>,
@@ -39,7 +39,7 @@ impl ConfigurationError {
         }
     }
 
-    /// Handles with message for this public contract.
+    /// Creates a configuration diagnostic with an additional human-readable message.
     pub fn with_message(
         kind: ConfigurationErrorKind,
         field_path: impl Into<String>,

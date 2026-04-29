@@ -9,7 +9,7 @@ mod file;
 mod raw;
 mod validation;
 
-/// File value for the surrounding public contract.
+/// Re-exports validated file-backed and layered configuration API types.
 pub use file::{
     AutoStartIntent, ConfigurationBoundary, ConfigurationFingerprint, ConfigurationLayerKind,
     ConfigurationLayerSource, ConfigurationLoadFailure, ConfigurationSnapshot,

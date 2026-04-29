@@ -25,7 +25,7 @@ pub struct ProviderExecutionRequest {
 }
 
 impl ProviderExecutionRequest {
-    /// Creates a validated value for this public contract.
+    /// Creates a provider execution request for a provider, optional account, and canonical request.
     pub fn new(
         provider_id: impl Into<String>,
         account_id: Option<String>,
@@ -142,7 +142,7 @@ pub struct MockProviderHarness {
 }
 
 impl MockProviderHarness {
-    /// Creates a validated value for this public contract.
+    /// Creates a mock provider harness for deterministic provider execution tests.
     pub fn new(
         provider_id: impl Into<String>,
         display_name: impl Into<String>,
@@ -336,7 +336,7 @@ pub struct MockProviderAccount {
 }
 
 impl MockProviderAccount {
-    /// Creates a validated value for this public contract.
+    /// Creates a mock provider account with authenticated, unknown-quota defaults.
     pub fn new(account_id: impl Into<String>, display_name: impl Into<String>) -> Self {
         Self {
             account_id: account_id.into(),

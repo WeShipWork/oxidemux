@@ -89,7 +89,7 @@ pub struct CanonicalProtocolRequest {
 }
 
 impl CanonicalProtocolRequest {
-    /// Creates a validated value for this public contract.
+    /// Creates a canonical request after validating protocol metadata, model, and payload.
     pub fn new(
         protocol: ProtocolMetadata,
         model: impl Into<String>,
@@ -124,7 +124,7 @@ pub struct CanonicalProtocolResponse {
 }
 
 impl CanonicalProtocolResponse {
-    /// Creates a validated value for this public contract.
+    /// Creates a canonical response after validating protocol metadata, status, and payload.
     pub fn new(
         protocol: ProtocolMetadata,
         status: ProtocolResponseStatus,
@@ -278,7 +278,7 @@ pub struct ProviderSpecificProtocolMetadata {
 }
 
 impl ProviderSpecificProtocolMetadata {
-    /// Creates a validated value for this public contract.
+    /// Creates provider-specific protocol metadata for a named provider format.
     pub fn new(
         provider_id: impl Into<String>,
         format_name: impl Into<String>,
@@ -347,7 +347,7 @@ pub struct ProtocolResponseStatus {
 }
 
 impl ProtocolResponseStatus {
-    /// Creates a validated value for this public contract.
+    /// Creates protocol response status metadata with a validated HTTP-style code.
     pub fn new(code: u16, reason: Option<String>) -> Result<Self, CoreError> {
         let status = Self { code, reason };
         status.validate()?;
