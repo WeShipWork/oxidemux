@@ -5,6 +5,8 @@ pkl = "latest"
 typos = "1.45.2"
 gitleaks = "latest"
 rumdl = "latest"
+"cargo:cargo-deny" = "0.19.0"
+"cargo:cargo-audit" = "0.22.1"
 
 [tasks.rust-components]
 run = "rustup component add rustfmt clippy --toolchain 1.95.0"
@@ -27,6 +29,18 @@ run = "cargo test --all-targets --all-features"
 [tasks.doc]
 env = { RUSTDOCFLAGS = "-D warnings" }
 run = "cargo doc --workspace --no-deps"
+
+[tasks.deny]
+run = "cargo deny --workspace check advisories bans licenses sources"
+
+[tasks.audit]
+run = "cargo audit --deny warnings"
+
+[tasks.security]
+run = [
+    "mise run deny",
+    "mise run audit",
+]
 
 [tasks.hk-check]
 run = "hk check --all"
