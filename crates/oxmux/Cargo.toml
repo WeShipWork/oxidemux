@@ -10,3 +10,4 @@ description = "Headless reusable core boundary for OxideMux."
 path = "src/oxmux.rs"
 
 [dependencies]
+serde_json = "1"

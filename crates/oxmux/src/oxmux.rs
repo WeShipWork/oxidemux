@@ -2,6 +2,7 @@ pub mod configuration;
 pub mod errors;
 pub mod local_proxy_runtime;
 pub mod management;
+pub mod minimal_proxy;
 pub mod protocol;
 pub mod provider;
 pub mod routing;
@@ -14,11 +15,16 @@ pub use configuration::{
 pub use errors::CoreError;
 pub use local_proxy_runtime::{
     LOCAL_HEALTH_PATH, LOCAL_HEALTH_RESPONSE_BODY, LocalHealthRuntime, LocalHealthRuntimeConfig,
-    LocalHealthRuntimeStatus,
+    LocalHealthRuntimeStatus, LocalProxyRouteConfig,
 };
 pub use management::{
     BoundEndpoint, CoreHealthState, LifecycleControlIntent, ManagementSnapshot,
     ProxyLifecycleState, UptimeMetadata,
+};
+pub use minimal_proxy::{
+    MAX_MINIMAL_PROXY_BODY_BYTES, MINIMAL_CHAT_COMPLETIONS_PATH, MINIMAL_PROXY_JSON_CONTENT_TYPE,
+    MinimalProxyEngine, MinimalProxyEngineConfig, MinimalProxyErrorCode, MinimalProxyRequest,
+    MinimalProxyResponse,
 };
 pub use protocol::{
     CanonicalProtocolRequest, CanonicalProtocolResponse, ClaudeProtocolMetadata,
