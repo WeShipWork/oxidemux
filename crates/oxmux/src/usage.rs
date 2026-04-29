@@ -79,12 +79,12 @@ pub enum MeteredValue {
     Known(u64),
     /// State is not known to the core.
     Unknown,
-    /// Target cannot currently be used.
+    /// Meter value cannot currently be measured.
     Unavailable {
         /// Human-readable reason for this state.
         reason: String,
     },
-    /// Operation completed or state exists with degraded quality.
+    /// Meter value is partial, stale, or otherwise lower confidence.
     Degraded {
         /// Metered value when known.
         value: Option<u64>,
@@ -98,12 +98,12 @@ pub enum MeteredValue {
 pub enum QuotaState {
     /// State is not known to the core.
     Unknown,
-    /// Target cannot currently be used.
+    /// Quota reading cannot currently be obtained.
     Unavailable {
         /// Human-readable reason for this state.
         reason: String,
     },
-    /// Operation completed or state exists with degraded quality.
+    /// Quota reading is partial, stale, or otherwise lower confidence.
     Degraded {
         /// Remaining quota units when known.
         remaining: Option<u64>,
