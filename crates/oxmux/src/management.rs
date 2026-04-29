@@ -6,7 +6,8 @@ use std::time::Duration;
 
 use crate::configuration::{
     ConfigurationLoadFailure, ConfigurationSnapshot, FileBackedManagementConfiguration,
-    FileConfigurationState,
+    FileConfigurationState, LayeredConfigurationRejectedCandidate,
+    LayeredConfigurationReloadOutcome, LayeredConfigurationState,
 };
 use crate::provider::{DegradedReason, ProviderSummary};
 use crate::usage::{QuotaSummary, UsageSummary};
@@ -19,7 +20,9 @@ pub struct ManagementSnapshot {
     pub health: CoreHealthState,
     pub configuration: ConfigurationSnapshot,
     pub file_configuration: Option<FileBackedManagementConfiguration>,
+    pub layered_configuration: Option<LayeredManagementConfiguration>,
     pub last_configuration_load_failure: Option<ConfigurationLoadFailure>,
+    pub last_layered_configuration_failure: Option<LayeredConfigurationRejectedCandidate>,
     pub providers: Vec<ProviderSummary>,
     pub usage: UsageSummary,
     pub quota: QuotaSummary,
@@ -35,7 +38,9 @@ impl ManagementSnapshot {
             health: CoreHealthState::Healthy,
             configuration: ConfigurationSnapshot::local_development(),
             file_configuration: None,
+            layered_configuration: None,
             last_configuration_load_failure: None,
+            last_layered_configuration_failure: None,
             providers: Vec::new(),
             usage: UsageSummary::zero(),
             quota: QuotaSummary::unknown(),
@@ -63,6 +68,39 @@ impl ManagementSnapshot {
         }
         snapshot
     }
+
+    pub fn from_layered_configuration_state(state: &LayeredConfigurationState) -> Self {
+        let mut snapshot = Self::inert_bootstrap();
+        if let Some(active) = state.active() {
+            snapshot.configuration = active.configuration.configuration_snapshot();
+            snapshot.file_configuration = Some(FileBackedManagementConfiguration::from(
+                &active.configuration,
+            ));
+            snapshot.layered_configuration = Some(LayeredManagementConfiguration {
+                active_fingerprint: active.fingerprint.clone(),
+                sources: active.sources.clone(),
+                latest_reload_outcome: state.latest_reload_outcome().cloned(),
+            });
+            snapshot.providers = active.configuration.provider_summaries();
+            snapshot.usage = active.configuration.usage_summary();
+            snapshot.quota = active.configuration.quota_summary();
+            snapshot.warnings = active.configuration.warnings.clone();
+        }
+        snapshot.last_layered_configuration_failure = state.failed_candidate().cloned();
+        if let Some(failure) = state.failed_candidate() {
+            snapshot.errors = vec![CoreError::Configuration {
+                errors: failure.errors.clone(),
+            }];
+        }
+        snapshot
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LayeredManagementConfiguration {
+    pub active_fingerprint: crate::configuration::ConfigurationFingerprint,
+    pub sources: Vec<crate::configuration::ConfigurationLayerSource>,
+    pub latest_reload_outcome: Option<LayeredConfigurationReloadOutcome>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

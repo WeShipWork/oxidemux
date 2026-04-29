@@ -63,34 +63,17 @@ pub(super) struct RawRoutingDefaultConfiguration {
     pub(super) fallback_enabled: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub(super) struct RawObservabilityConfiguration {
     pub(super) logging: Option<String>,
     pub(super) usage_collection: Option<toml::Value>,
 }
 
-impl Default for RawObservabilityConfiguration {
-    fn default() -> Self {
-        Self {
-            logging: Some("standard".to_string()),
-            usage_collection: Some(toml::Value::Boolean(true)),
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub(super) struct RawLifecycleConfiguration {
     pub(super) auto_start: Option<String>,
-}
-
-impl Default for RawLifecycleConfiguration {
-    fn default() -> Self {
-        Self {
-            auto_start: Some("disabled".to_string()),
-        }
-    }
 }
 
 pub(super) fn parse_raw_configuration(
