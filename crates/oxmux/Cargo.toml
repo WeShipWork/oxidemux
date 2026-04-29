@@ -1,10 +1,17 @@
 [package]
 name = "oxmux"
 version = "0.1.0"
-edition = "2024"
-rust-version = "1.95.0"
-license = "MIT OR Apache-2.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
 description = "Headless reusable core boundary for OxideMux."
+readme = "../../README.md"
+documentation = "https://docs.rs/oxmux"
+keywords = ["ai", "proxy", "routing", "subscription"]
+categories = ["development-tools"]
 
 [lib]
 path = "src/oxmux.rs"

@@ -1,14 +1,21 @@
 [package]
 name = "oxidemux"
 version = "0.1.0"
-edition = "2024"
-rust-version = "1.95.0"
-license = "MIT OR Apache-2.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
 description = "A cross-platform Rust and GPUI-based AI subscription proxy shell inspired by VibeProxy."
+readme = "../../README.md"
+documentation = "https://docs.rs/oxidemux"
+keywords = ["ai", "proxy", "desktop", "subscription"]
+categories = ["development-tools"]
 
 [[bin]]
 name = "oxidemux"
 path = "src/main.rs"
 
 [dependencies]
-oxmux = { path = "../oxmux" }
+oxmux = { path = "../oxmux", version = "0.1.0" }
