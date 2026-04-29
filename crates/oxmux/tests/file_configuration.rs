@@ -697,6 +697,12 @@ fn layered_secret_like_credentials_are_rejected() -> Result<(), Box<dyn Error>> 
         error.kind == ConfigurationErrorKind::InvalidCredentialReference
             && error.invalid_value == InvalidConfigurationValue::SecretLike
     }));
+    assert!(
+        !rejected
+            .errors
+            .iter()
+            .any(|error| error.kind == ConfigurationErrorKind::UnknownAccountReference)
+    );
     assert!(state.active().is_none());
     Ok(())
 }

@@ -293,7 +293,7 @@ fn validate_accounts(
 
         let credential_reference = match raw_account.credential_reference {
             Some(value) => match validate_credential_reference(&value) {
-                CredentialReferenceValidation::Valid => Some(value),
+                CredentialReferenceValidation::Valid => value,
                 CredentialReferenceValidation::Malformed => {
                     errors.push(owned_error(
                         ConfigurationErrorKind::InvalidCredentialReference,
@@ -301,7 +301,7 @@ fn validate_accounts(
                         InvalidConfigurationValue::Malformed,
                         source,
                     ));
-                    None
+                    String::new()
                 }
                 CredentialReferenceValidation::SecretLike => {
                     errors.push(owned_error(
@@ -310,7 +310,7 @@ fn validate_accounts(
                         InvalidConfigurationValue::SecretLike,
                         source,
                     ));
-                    None
+                    String::new()
                 }
             },
             None => {
@@ -320,16 +320,14 @@ fn validate_accounts(
                     InvalidConfigurationValue::Missing,
                     source,
                 ));
-                None
+                String::new()
             }
         };
 
-        if let Some(credential_reference) = credential_reference {
-            accounts.push(FileAccountConfiguration {
-                id,
-                credential_reference,
-            });
-        }
+        accounts.push(FileAccountConfiguration {
+            id,
+            credential_reference,
+        });
     }
 
     accounts

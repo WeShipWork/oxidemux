@@ -806,9 +806,10 @@ fn fingerprint_configuration(
             provider.id, provider.protocol_family, provider.routing_eligible
         ));
         for account in provider.accounts {
+            let credential_reference_hash = fnv1a64(account.credential_reference.as_bytes());
             canonical.push_str(&format!(
-                "account:{}:{}\n",
-                account.id, account.credential_reference
+                "account:{}:{credential_reference_hash:016x}\n",
+                account.id
             ));
         }
     }
