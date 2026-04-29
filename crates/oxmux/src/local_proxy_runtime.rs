@@ -17,6 +17,10 @@ use crate::{
     ProviderExecutor, ProxyLifecycleState, QuotaSummary, RoutingAvailabilitySnapshot,
     RoutingPolicy, UptimeMetadata, UsageSummary, core_identity,
 };
+use crate::{
+    LocalClientAuthorizationAttempt, LocalClientRouteScope, LocalRouteProtection,
+    LocalRouteProtectionMetadata,
+};
 
 /// HTTP path used by the local health runtime to serve health responses.
 pub const LOCAL_HEALTH_PATH: &str = "/health";
@@ -26,6 +30,7 @@ pub const LOCAL_HEALTH_RESPONSE_BODY: &str = "oxmux local health runtime: health
 const MAX_LOCAL_HEALTH_REQUEST_BYTES: usize = 8 * 1024;
 const MAX_LOCAL_PROXY_REQUEST_BYTES: usize = 64 * 1024;
 const LOCAL_CHAT_COMPLETIONS_PATH: &str = crate::MINIMAL_CHAT_COMPLETIONS_PATH;
+const LOCAL_MANAGEMENT_PREFIX: &str = "/v0/management/";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 /// Loopback listen configuration for the local health runtime.
@@ -82,6 +87,8 @@ pub struct LocalProxyRouteConfig {
     pub availability: RoutingAvailabilitySnapshot,
     /// Provider executor used by the minimal proxy route.
     pub provider_executor: Arc<dyn ProviderExecutor + Send + Sync>,
+    /// Local route protection policies for inference and management scopes.
+    pub route_protection: LocalRouteProtection,
 }
 
 impl LocalProxyRouteConfig {
@@ -95,7 +102,14 @@ impl LocalProxyRouteConfig {
             routing_policy,
             availability,
             provider_executor,
+            route_protection: LocalRouteProtection::disabled(),
         }
+    }
+
+    /// Returns this route configuration with local route protection policies.
+    pub fn with_route_protection(mut self, route_protection: LocalRouteProtection) -> Self {
+        self.route_protection = route_protection;
+        self
     }
 }
 
@@ -108,6 +122,8 @@ pub struct LocalHealthRuntimeStatus {
     pub health: CoreHealthState,
     /// Bound endpoint associated with this lifecycle state.
     pub endpoint: Option<BoundEndpoint>,
+    /// Redacted local route protection metadata.
+    pub local_route_protection: LocalRouteProtectionMetadata,
 }
 
 impl LocalHealthRuntimeStatus {
@@ -117,6 +133,7 @@ impl LocalHealthRuntimeStatus {
             lifecycle: ProxyLifecycleState::Starting,
             health: CoreHealthState::Healthy,
             endpoint: None,
+            local_route_protection: LocalRouteProtectionMetadata::disabled(),
         }
     }
 
@@ -128,6 +145,7 @@ impl LocalHealthRuntimeStatus {
             },
             health: CoreHealthState::Failed { error },
             endpoint: None,
+            local_route_protection: LocalRouteProtectionMetadata::disabled(),
         }
     }
 
@@ -137,6 +155,7 @@ impl LocalHealthRuntimeStatus {
             lifecycle: ProxyLifecycleState::Stopped,
             health: CoreHealthState::Healthy,
             endpoint,
+            local_route_protection: LocalRouteProtectionMetadata::disabled(),
         }
     }
 
@@ -159,6 +178,7 @@ impl LocalHealthRuntimeStatus {
             providers: Vec::new(),
             usage: UsageSummary::zero(),
             quota: QuotaSummary::unknown(),
+            local_route_protection: self.local_route_protection,
             warnings: Vec::new(),
             errors,
         }
@@ -174,6 +194,7 @@ pub struct LocalHealthRuntime {
     shutdown_requested: Arc<AtomicBool>,
     worker: Option<JoinHandle<Result<(), CoreError>>>,
     status: LocalHealthRuntimeStatus,
+    local_route_protection: LocalRouteProtectionMetadata,
 }
 
 impl std::fmt::Debug for LocalHealthRuntime {
@@ -229,6 +250,10 @@ impl LocalHealthRuntime {
         let endpoint = BoundEndpoint { socket_addr };
         let shutdown_requested = Arc::new(AtomicBool::new(false));
         let worker_shutdown_requested = shutdown_requested.clone();
+        let local_route_protection = proxy_route
+            .as_ref()
+            .map(|route| route.route_protection.metadata())
+            .unwrap_or_else(LocalRouteProtectionMetadata::disabled);
         let worker = thread::spawn(move || {
             serve_health_requests(listener, worker_shutdown_requested, proxy_route)
         });
@@ -246,6 +271,7 @@ impl LocalHealthRuntime {
             },
             health: CoreHealthState::Healthy,
             endpoint: Some(endpoint),
+            local_route_protection,
         };
 
         Ok(Self {
@@ -256,6 +282,7 @@ impl LocalHealthRuntime {
             shutdown_requested,
             worker: Some(worker),
             status,
+            local_route_protection,
         })
     }
 
@@ -287,6 +314,7 @@ impl LocalHealthRuntime {
                 },
                 health: CoreHealthState::Healthy,
                 endpoint: Some(self.endpoint),
+                local_route_protection: self.local_route_protection,
             },
             None => self.status.clone(),
         }
@@ -312,7 +340,10 @@ impl LocalHealthRuntime {
         if let Some(worker) = self.worker.take() {
             match worker.join() {
                 Ok(Ok(())) => {
-                    self.status = LocalHealthRuntimeStatus::stopped(Some(self.endpoint));
+                    self.status = LocalHealthRuntimeStatus {
+                        local_route_protection: self.local_route_protection,
+                        ..LocalHealthRuntimeStatus::stopped(Some(self.endpoint))
+                    };
                     Ok(self.status.clone())
                 }
                 Ok(Err(error)) => {
@@ -403,15 +434,22 @@ fn handle_connection(
         }
     };
 
-    match (request.method.as_str(), request.path.as_str()) {
-        ("GET", LOCAL_HEALTH_PATH) => {
-            write_response(&mut stream, "200 OK", LOCAL_HEALTH_RESPONSE_BODY)
-        }
-        ("POST", LOCAL_CHAT_COMPLETIONS_PATH) => {
+    match classify_local_route(&request) {
+        LocalRoute::Health => write_response(&mut stream, "200 OK", LOCAL_HEALTH_RESPONSE_BODY),
+        LocalRoute::Inference => {
             let Some(proxy_route) = proxy_route else {
                 let response = MinimalProxyResponse::unsupported_path();
                 return write_json_response(&mut stream, response.status_code, &response.body);
             };
+            if let Err(failure) = proxy_route
+                .route_protection
+                .inference
+                .authorize(LocalClientRouteScope::Inference, &request.authorization)
+                .into_result()
+            {
+                let response = MinimalProxyResponse::local_client_unauthorized(&failure);
+                return write_json_response(&mut stream, response.status_code, &response.body);
+            }
             let proxy_request = match MinimalProxyRequest::open_ai_chat_completions(request.body) {
                 Ok(request) => request,
                 Err(error) => {
@@ -429,10 +467,43 @@ fn handle_connection(
             );
             write_json_response(&mut stream, response.status_code, &response.body)
         }
-        _ => {
+        LocalRoute::Management => {
+            let Some(proxy_route) = proxy_route else {
+                let response = MinimalProxyResponse::unsupported_path();
+                return write_json_response(&mut stream, response.status_code, &response.body);
+            };
+            let authorization_outcome = proxy_route
+                .route_protection
+                .management
+                .authorize(LocalClientRouteScope::Management, &request.authorization);
+            if let Err(failure) = authorization_outcome.into_result() {
+                let response = MinimalProxyResponse::local_client_unauthorized(&failure);
+                return write_json_response(&mut stream, response.status_code, &response.body);
+            }
+            let response = MinimalProxyResponse::management_boundary();
+            write_json_response(&mut stream, response.status_code, &response.body)
+        }
+        LocalRoute::Unsupported => {
             let response = MinimalProxyResponse::unsupported_path();
             write_json_response(&mut stream, response.status_code, &response.body)
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LocalRoute {
+    Health,
+    Inference,
+    Management,
+    Unsupported,
+}
+
+fn classify_local_route(request: &LocalHttpRequest) -> LocalRoute {
+    match (request.method.as_str(), request.path.as_str()) {
+        ("GET", LOCAL_HEALTH_PATH) => LocalRoute::Health,
+        ("POST", LOCAL_CHAT_COMPLETIONS_PATH) => LocalRoute::Inference,
+        (_, path) if path.starts_with(LOCAL_MANAGEMENT_PREFIX) => LocalRoute::Management,
+        _ => LocalRoute::Unsupported,
     }
 }
 
@@ -440,6 +511,7 @@ fn handle_connection(
 struct LocalHttpRequest {
     method: String,
     path: String,
+    authorization: LocalClientAuthorizationAttempt,
     body: Vec<u8>,
 }
 
@@ -514,15 +586,17 @@ fn read_local_request(stream: &mut TcpStream) -> Result<LocalHttpRequest, CoreEr
         ));
     }
 
-    let content_length = parse_content_length(header_lines)?;
+    let headers = parse_bounded_headers(header_lines)?;
     let body_start = header_end + 4;
-    let expected_len = body_start.checked_add(content_length).ok_or_else(|| {
-        invalid_local_request(
-            "content-length",
-            crate::MinimalProxyErrorCode::RequestTooLarge,
-            "request body length overflows local parser bounds",
-        )
-    })?;
+    let expected_len = body_start
+        .checked_add(headers.content_length)
+        .ok_or_else(|| {
+            invalid_local_request(
+                "content-length",
+                crate::MinimalProxyErrorCode::RequestTooLarge,
+                "request body length overflows local parser bounds",
+            )
+        })?;
     if expected_len > MAX_LOCAL_PROXY_REQUEST_BYTES {
         return Err(invalid_local_request(
             "body",
@@ -556,8 +630,15 @@ fn read_local_request(stream: &mut TcpStream) -> Result<LocalHttpRequest, CoreEr
     Ok(LocalHttpRequest {
         method: method.to_string(),
         path: path.to_string(),
+        authorization: headers.authorization,
         body: request[body_start..expected_len].to_vec(),
     })
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct BoundedLocalHeaders {
+    content_length: usize,
+    authorization: LocalClientAuthorizationAttempt,
 }
 
 #[cfg(test)]
@@ -602,10 +683,11 @@ fn find_header_end(request: &[u8]) -> Option<usize> {
     request.windows(4).position(|window| window == b"\r\n\r\n")
 }
 
-fn parse_content_length<'a>(
+fn parse_bounded_headers<'a>(
     header_lines: impl Iterator<Item = &'a str>,
-) -> Result<usize, CoreError> {
+) -> Result<BoundedLocalHeaders, CoreError> {
     let mut content_length = None;
+    let mut authorization = None;
     for line in header_lines {
         let Some((name, value)) = line.split_once(':') else {
             continue;
@@ -628,10 +710,35 @@ fn parse_content_length<'a>(
             }
 
             content_length = Some(parsed_content_length);
+        } else if name.eq_ignore_ascii_case("authorization") {
+            if authorization.is_some() {
+                authorization = Some(LocalClientAuthorizationAttempt::Malformed);
+            } else {
+                authorization = Some(parse_authorization_header(value));
+            }
         }
     }
 
-    Ok(content_length.unwrap_or(0))
+    Ok(BoundedLocalHeaders {
+        content_length: content_length.unwrap_or(0),
+        authorization: authorization.unwrap_or(LocalClientAuthorizationAttempt::Missing),
+    })
+}
+
+fn parse_authorization_header(value: &str) -> LocalClientAuthorizationAttempt {
+    let trimmed = value.trim();
+    let Some((scheme, token)) = trimmed.split_once(char::is_whitespace) else {
+        return LocalClientAuthorizationAttempt::Malformed;
+    };
+    if !scheme.eq_ignore_ascii_case("Bearer") {
+        return LocalClientAuthorizationAttempt::UnsupportedScheme;
+    }
+    let token = token.trim();
+    if token.is_empty() || token.split_whitespace().count() != 1 {
+        return LocalClientAuthorizationAttempt::Malformed;
+    }
+
+    LocalClientAuthorizationAttempt::bearer(token)
 }
 
 fn invalid_local_request(
@@ -687,6 +794,7 @@ fn write_json_response(
     let reason = match status_code {
         200 => "OK",
         400 => "Bad Request",
+        401 => "Unauthorized",
         404 => "Not Found",
         408 => "Request Timeout",
         500 => "Internal Server Error",

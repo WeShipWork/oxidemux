@@ -18,7 +18,7 @@ use crate::configuration::{
 };
 use crate::provider::{DegradedReason, ProviderSummary};
 use crate::usage::{QuotaSummary, UsageSummary};
-use crate::{CoreError, CoreIdentity, core_identity};
+use crate::{CoreError, CoreIdentity, LocalRouteProtectionMetadata, core_identity};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 /// Aggregate management view of identity, lifecycle, health, configuration, provider, usage, quota, and error state.
@@ -45,6 +45,8 @@ pub struct ManagementSnapshot {
     pub usage: UsageSummary,
     /// Quota summary visible in management state.
     pub quota: QuotaSummary,
+    /// Local route protection metadata visible in management state.
+    pub local_route_protection: LocalRouteProtectionMetadata,
     /// Non-fatal warnings visible to management consumers.
     pub warnings: Vec<String>,
     /// Structured errors associated with this state.
@@ -66,6 +68,7 @@ impl ManagementSnapshot {
             providers: Vec::new(),
             usage: UsageSummary::zero(),
             quota: QuotaSummary::unknown(),
+            local_route_protection: LocalRouteProtectionMetadata::disabled(),
             warnings: Vec::new(),
             errors: Vec::new(),
         }

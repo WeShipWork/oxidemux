@@ -6,10 +6,14 @@ use std::time::Duration;
 use oxmux::{
     AccountSummary, AuthMethodCategory, AuthState, BoundEndpoint, ConfigurationSnapshot,
     ConfigurationUpdateIntent, CoreError, CoreHealthState, DegradedReason, LastCheckedMetadata,
-    LifecycleControlIntent, ManagementSnapshot, MeteredValue, ProtocolFamily, ProtocolMetadata,
-    ProtocolPayload, ProviderCapability, ProviderSummary, ProxyLifecycleState, QuotaState,
-    QuotaSummary, ResponseMode, RoutingDefault, StreamEvent, StreamMetadata, StreamTerminalState,
-    StreamingResponse, UptimeMetadata, UsageSummary, core_identity,
+    LifecycleControlIntent, LocalClientAuthorizationAttempt, LocalClientAuthorizationFailureReason,
+    LocalClientAuthorizationOutcome, LocalClientAuthorizationPolicy,
+    LocalClientAuthorizationPolicyMetadata, LocalClientCredential, LocalClientRouteScope,
+    LocalRouteProtection, LocalRouteProtectionMetadata, ManagementSnapshot, MeteredValue,
+    ProtocolFamily, ProtocolMetadata, ProtocolPayload, ProviderCapability, ProviderSummary,
+    ProxyLifecycleState, QuotaState, QuotaSummary, ResponseMode, RoutingDefault, StreamEvent,
+    StreamMetadata, StreamTerminalState, StreamingResponse, UptimeMetadata, UsageSummary,
+    core_identity,
 };
 
 #[test]
@@ -32,6 +36,54 @@ fn streaming_primitives_are_usable_through_public_facade() -> Result<(), CoreErr
     assert_eq!(mode.streaming_response(), Some(&stream));
     assert_eq!(ProtocolMetadata::open_ai().family(), ProtocolFamily::OpenAi);
     assert!(matches!(ProtocolPayload::empty(), ProtocolPayload { .. }));
+
+    Ok(())
+}
+
+#[test]
+fn local_client_authorization_primitives_are_public_and_redacted()
+-> Result<(), Box<dyn std::error::Error>> {
+    let credential = LocalClientCredential::new("local-secret")?;
+    let policy = LocalClientAuthorizationPolicy::required(credential.clone());
+
+    let authorized = policy.authorize(
+        LocalClientRouteScope::Inference,
+        &LocalClientAuthorizationAttempt::bearer("local-secret"),
+    );
+    assert!(matches!(
+        authorized,
+        LocalClientAuthorizationOutcome::Authorized {
+            scope: LocalClientRouteScope::Inference
+        }
+    ));
+
+    let denied = policy.authorize(
+        LocalClientRouteScope::Management,
+        &LocalClientAuthorizationAttempt::bearer("wrong-secret"),
+    );
+    assert!(matches!(
+        denied,
+        LocalClientAuthorizationOutcome::Denied(failure)
+            if failure.reason == LocalClientAuthorizationFailureReason::InvalidCredential
+                && failure.scope == LocalClientRouteScope::Management
+    ));
+
+    assert!(!format!("{credential:?}").contains("local-secret"));
+    assert!(matches!(
+        policy.metadata(),
+        LocalClientAuthorizationPolicyMetadata::Required { credential }
+            if credential.configured && credential.display.contains("redacted")
+    ));
+
+    let route_protection = LocalRouteProtection {
+        inference: policy,
+        management: LocalClientAuthorizationPolicy::required_without_credential(),
+    };
+    assert!(matches!(
+        route_protection.metadata().management,
+        LocalClientAuthorizationPolicyMetadata::Required { credential }
+            if !credential.configured && credential.display.contains("missing")
+    ));
 
     Ok(())
 }
@@ -116,6 +168,7 @@ fn management_snapshot_can_be_constructed_from_in_memory_values() {
                 reason: "provider quota endpoint is not implemented".to_string(),
             },
         },
+        local_route_protection: LocalRouteProtectionMetadata::disabled(),
         warnings: vec!["quota data is placeholder-only".to_string()],
         errors: vec![CoreError::UsageQuotaSummary {
             message: "quota fetch deferred".to_string(),
