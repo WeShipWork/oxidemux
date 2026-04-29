@@ -45,19 +45,19 @@ impl RoutingPolicy {
         }
     }
 
-    /// Handles with model alias for this public contract.
+    /// Adds one model alias to this routing policy.
     pub fn with_model_alias(mut self, alias: ModelAlias) -> Self {
         self.model_aliases.push(alias);
         self
     }
 
-    /// Handles with fallback for this public contract.
+    /// Replaces the default fallback behavior for this routing policy.
     pub fn with_fallback(mut self, fallback: FallbackBehavior) -> Self {
         self.fallback = fallback;
         self
     }
 
-    /// Handles with default target for this public contract.
+    /// Sets the target used when no model route matches the request.
     pub fn with_default_target(mut self, target: RoutingTarget) -> Self {
         self.default_target = Some(target);
         self
@@ -273,7 +273,7 @@ pub struct ModelAlias {
 }
 
 impl ModelAlias {
-    /// Creates a model route for a resolved model and its ordered target candidates.
+    /// Creates a model alias from a requested model name to the resolved model name.
     pub fn new(requested_model: impl Into<String>, resolved_model: impl Into<String>) -> Self {
         Self {
             requested_model: requested_model.into(),
@@ -297,7 +297,7 @@ pub struct ModelRoute {
 }
 
 impl ModelRoute {
-    /// Creates a routing candidate for a provider or provider account target.
+    /// Creates a model route for a resolved model and its ordered target candidates.
     pub fn new(resolved_model: impl Into<String>, candidates: Vec<RoutingCandidate>) -> Self {
         Self {
             resolved_model: resolved_model.into(),
@@ -324,7 +324,7 @@ pub struct RoutingCandidate {
 }
 
 impl RoutingCandidate {
-    /// Creates explicit fallback behavior for routing candidate evaluation.
+    /// Creates a routing candidate for a provider or provider account target.
     pub fn new(target: RoutingTarget) -> Self {
         Self { target }
     }
@@ -495,7 +495,7 @@ pub enum RoutingAvailabilityState {
         /// Human-readable reason for this state.
         reason: String,
     },
-    /// Operation completed or state exists with degraded quality.
+    /// Target is usable only as a degraded routing candidate.
     Degraded {
         /// Human-readable reason for this state.
         reason: String,
@@ -518,7 +518,7 @@ impl RoutingAvailabilityState {
 pub struct RoutingSelectionRequest {
     /// Model name requested by the caller before alias resolution.
     pub requested_model: String,
-    /// Explicit target value for the surrounding public contract.
+    /// Provider/account target requested by the caller instead of policy selection.
     pub explicit_target: Option<RoutingTarget>,
     /// Whether routing may continue after a skipped candidate.
     pub fallback_enabled: Option<bool>,
@@ -537,19 +537,19 @@ impl RoutingSelectionRequest {
         }
     }
 
-    /// Handles with explicit target for this public contract.
+    /// Sets the provider/account target that should bypass policy selection.
     pub fn with_explicit_target(mut self, target: RoutingTarget) -> Self {
         self.explicit_target = Some(target);
         self
     }
 
-    /// Handles with fallback enabled for this public contract.
+    /// Overrides whether routing may continue after a skipped candidate.
     pub fn with_fallback_enabled(mut self, fallback_enabled: bool) -> Self {
         self.fallback_enabled = Some(fallback_enabled);
         self
     }
 
-    /// Handles with degraded allowed for this public contract.
+    /// Overrides whether degraded routing candidates may be selected.
     pub fn with_degraded_allowed(mut self, allow_degraded: bool) -> Self {
         self.allow_degraded = Some(allow_degraded);
         self
