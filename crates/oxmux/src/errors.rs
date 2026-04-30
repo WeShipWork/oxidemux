@@ -96,6 +96,14 @@ pub enum ConfigurationErrorKind {
     InvalidUsageCollectionSetting,
     /// Auto-start setting is invalid.
     InvalidAutoStartIntent,
+    /// Streaming keepalive interval is invalid.
+    InvalidStreamingKeepaliveInterval,
+    /// Streaming bootstrap retry count is invalid.
+    InvalidStreamingBootstrapRetryCount,
+    /// Streaming timeout setting is invalid.
+    InvalidStreamingTimeout,
+    /// Streaming cancellation behavior is invalid.
+    InvalidStreamingCancellation,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

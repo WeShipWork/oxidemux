@@ -6,9 +6,105 @@
 
 use crate::{CanonicalProtocolResponse, CoreError, ProtocolMetadata, ProtocolPayload};
 
+/// Minimum supported stream-control duration in milliseconds.
+pub const MIN_STREAMING_CONTROL_DURATION_MS: u64 = 1;
+/// Maximum supported stream-control duration in milliseconds.
+pub const MAX_STREAMING_CONTROL_DURATION_MS: u64 = 300_000;
+/// Maximum supported additional bootstrap retry attempts after the initial attempt.
+pub const MAX_STREAMING_BOOTSTRAP_RETRY_COUNT: u8 = 10;
+/// Reserved metadata key emitted by typed keepalive helpers.
+pub const OXMUX_KEEPALIVE_METADATA_KEY: &str = "oxmux.keepalive";
+/// Reserved metadata key emitted by typed timeout helpers.
+pub const OXMUX_TIMEOUT_METADATA_KEY: &str = "oxmux.timeout";
+/// Reserved metadata key emitted by typed committed retry-summary helpers.
+pub const OXMUX_RETRY_SUMMARY_METADATA_KEY: &str = "oxmux.retry_summary";
+/// Reserved metadata key emitted by typed retry-exhaustion helpers.
+pub const OXMUX_RETRY_EXHAUSTED_METADATA_KEY: &str = "oxmux.retry_exhausted";
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 /// Marker for streaming response ownership in the headless core.
 pub struct StreamingBoundary;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Deterministic headless policy for stream keepalive, bootstrap retry, timeout, and cancellation behavior.
+pub struct StreamingRobustnessPolicy {
+    /// Optional keepalive interval represented in milliseconds; omission disables keepalive metadata.
+    pub keepalive_interval_ms: Option<u64>,
+    /// Additional bootstrap attempts after the initial streaming attempt.
+    pub bootstrap_retry_count: u8,
+    /// Optional timeout duration represented in milliseconds; omission disables timeout metadata.
+    pub timeout_ms: Option<u64>,
+    /// Cancellation behavior enabled for deterministic stream-control handling.
+    pub cancellation: StreamingCancellationPolicy,
+}
+
+impl Default for StreamingRobustnessPolicy {
+    fn default() -> Self {
+        Self {
+            keepalive_interval_ms: None,
+            bootstrap_retry_count: 0,
+            timeout_ms: None,
+            cancellation: StreamingCancellationPolicy::Disabled,
+        }
+    }
+}
+
+impl StreamingRobustnessPolicy {
+    /// Creates a policy and validates all supported ranges and cross-field rules.
+    pub fn new(
+        keepalive_interval_ms: Option<u64>,
+        bootstrap_retry_count: u8,
+        timeout_ms: Option<u64>,
+        cancellation: StreamingCancellationPolicy,
+    ) -> Result<Self, CoreError> {
+        let policy = Self {
+            keepalive_interval_ms,
+            bootstrap_retry_count,
+            timeout_ms,
+            cancellation,
+        };
+        policy.validate()?;
+        Ok(policy)
+    }
+
+    /// Validates this policy and returns structured streaming errors for invalid code-owned values.
+    pub fn validate(&self) -> Result<(), CoreError> {
+        validate_optional_duration(
+            "streaming.keepalive-interval-ms",
+            self.keepalive_interval_ms,
+        )?;
+        validate_retry_count(self.bootstrap_retry_count)?;
+        validate_optional_duration("streaming.timeout-ms", self.timeout_ms)?;
+        if self.cancellation == StreamingCancellationPolicy::Timeout && self.timeout_ms.is_none() {
+            return Err(invalid_policy(
+                "streaming.cancellation",
+                "timeout cancellation requires streaming.timeout-ms",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Returns true when no stream robustness behavior is enabled.
+    pub fn is_disabled(&self) -> bool {
+        self == &Self::default()
+    }
+
+    /// Returns the maximum number of total attempts allowed by this policy.
+    pub fn max_attempts(&self) -> u8 {
+        self.bootstrap_retry_count.saturating_add(1)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Deterministic cancellation behavior configured for stream-control handling.
+pub enum StreamingCancellationPolicy {
+    /// Automatic cancellation is disabled.
+    Disabled,
+    /// Client disconnect may be represented by deterministic mock outcomes.
+    ClientDisconnect,
+    /// Timeout policy may convert timeout observations into cancellation.
+    Timeout,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 /// Provider response mode, either complete or streaming.
@@ -168,7 +264,68 @@ impl StreamMetadata {
             value: value.into(),
         };
         metadata.validate()?;
+        if is_reserved_oxmux_metadata_key(&metadata.name) {
+            return Err(CoreError::Streaming {
+                failure: StreamingFailure::InvalidSequence {
+                    reason: InvalidStreamSequence::ReservedMetadataKey {
+                        name: metadata.name,
+                    },
+                },
+            });
+        }
         Ok(metadata)
+    }
+
+    /// Creates deterministic keepalive metadata using the reserved `oxmux.keepalive` key.
+    pub fn keepalive() -> Self {
+        Self::reserved(OXMUX_KEEPALIVE_METADATA_KEY, "true")
+    }
+
+    /// Creates deterministic timeout metadata using the reserved `oxmux.timeout` key.
+    pub fn timeout(timeout_ms: u64) -> Result<Self, CoreError> {
+        validate_duration("streaming.timeout-ms", timeout_ms)?;
+        Ok(Self::reserved(
+            OXMUX_TIMEOUT_METADATA_KEY,
+            timeout_ms.to_string(),
+        ))
+    }
+
+    /// Creates committed-attempt retry summary metadata using the reserved `oxmux.retry_summary` key.
+    pub fn retry_summary(failed_attempts: u8, total_attempts: u8) -> Result<Self, CoreError> {
+        if total_attempts == 0 || failed_attempts >= total_attempts {
+            return Err(invalid_policy(
+                "streaming.bootstrap-retry-count",
+                "retry summary requires failed attempts to be less than total attempts",
+            ));
+        }
+        Ok(Self::reserved(
+            OXMUX_RETRY_SUMMARY_METADATA_KEY,
+            format!("failed_attempts={failed_attempts};total_attempts={total_attempts}"),
+        ))
+    }
+
+    /// Creates retry exhaustion metadata using the reserved `oxmux.retry_exhausted` key.
+    pub fn retry_exhausted(total_attempts: u8, failure: &StreamFailure) -> Result<Self, CoreError> {
+        if total_attempts == 0 {
+            return Err(invalid_policy(
+                "streaming.bootstrap-retry-count",
+                "retry exhaustion requires at least one attempted stream execution",
+            ));
+        }
+        Ok(Self::reserved(
+            OXMUX_RETRY_EXHAUSTED_METADATA_KEY,
+            format!(
+                "total_attempts={total_attempts};failure_code={}",
+                failure.code()
+            ),
+        ))
+    }
+
+    fn reserved(name: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            value: value.into(),
+        }
     }
 
     fn validate(&self) -> Result<(), CoreError> {
@@ -320,6 +477,34 @@ pub enum StreamingFailure {
         /// Structured failure associated with this state.
         failure: StreamFailure,
     },
+    /// Bootstrap retries were exhausted before any stream event was emitted.
+    RetryExhausted {
+        /// Total attempts that were executed, including the initial attempt.
+        total_attempts: u8,
+        /// Final underlying stream failure that exhausted retry budget.
+        failure: StreamFailure,
+    },
+    /// Timeout occurred before any stream event was emitted.
+    PreStreamTimeout {
+        /// Configured timeout duration in milliseconds.
+        timeout_ms: u64,
+        /// Structured failure associated with the timeout.
+        failure: StreamFailure,
+    },
+    /// Cancellation occurred before any stream event was emitted.
+    PreStreamCancellation {
+        /// Cancellation reason observed before stream commit.
+        reason: CancellationReason,
+        /// Structured failure associated with cancellation.
+        failure: StreamFailure,
+    },
+    /// Streaming robustness policy failed validation.
+    InvalidPolicy {
+        /// Field path associated with this policy diagnostic.
+        field: &'static str,
+        /// Human-readable diagnostic message.
+        message: String,
+    },
 }
 
 impl StreamingFailure {
@@ -328,6 +513,26 @@ impl StreamingFailure {
         match self {
             Self::InvalidSequence { reason } => reason.message(),
             Self::PreStreamFailure { failure } => failure.message().to_string(),
+            Self::RetryExhausted {
+                total_attempts,
+                failure,
+            } => format!(
+                "stream retry exhausted after {total_attempts} attempt(s): {}",
+                failure.message()
+            ),
+            Self::PreStreamTimeout {
+                timeout_ms,
+                failure,
+            } => format!(
+                "stream timed out before first event after {timeout_ms} ms: {}",
+                failure.message()
+            ),
+            Self::PreStreamCancellation { failure, .. } => {
+                format!("stream cancelled before first event: {}", failure.message())
+            }
+            Self::InvalidPolicy { field, message } => {
+                format!("streaming policy field {field} is invalid: {message}")
+            }
         }
     }
 }
@@ -351,6 +556,11 @@ pub enum InvalidStreamSequence {
         /// Index of a non-terminal event in the stream sequence.
         event_index: usize,
     },
+    /// Caller attempted to create generic metadata using the reserved `oxmux.` namespace.
+    ReservedMetadataKey {
+        /// Rejected metadata key.
+        name: String,
+    },
 }
 
 impl InvalidStreamSequence {
@@ -372,8 +582,71 @@ impl InvalidStreamSequence {
             } => format!(
                 "stream sequence has non-terminal event at index {event_index} after terminal event at index {terminal_index}"
             ),
+            Self::ReservedMetadataKey { name } => {
+                format!("stream metadata key {name} is reserved for typed oxmux helpers")
+            }
         }
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Latest stream robustness outcome exposed through management state.
+pub struct StreamingRobustnessOutcome {
+    /// Kind of stream robustness outcome observed by core execution.
+    pub kind: StreamingRobustnessOutcomeKind,
+    /// Provider identifier associated with the outcome, when known.
+    pub provider_id: Option<String>,
+    /// Account identifier associated with the outcome, when known.
+    pub account_id: Option<String>,
+}
+
+impl StreamingRobustnessOutcome {
+    /// Creates a stream robustness outcome without provider or account context.
+    pub fn new(kind: StreamingRobustnessOutcomeKind) -> Self {
+        Self {
+            kind,
+            provider_id: None,
+            account_id: None,
+        }
+    }
+
+    /// Attaches provider/account context to this outcome.
+    pub fn with_provider_context(
+        mut self,
+        provider_id: impl Into<String>,
+        account_id: Option<String>,
+    ) -> Self {
+        self.provider_id = Some(provider_id.into());
+        self.account_id = account_id;
+        self
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Matchable category for the latest stream robustness outcome.
+pub enum StreamingRobustnessOutcomeKind {
+    /// Timeout was observed for a streaming execution.
+    Timeout {
+        /// Timeout duration in milliseconds.
+        timeout_ms: u64,
+    },
+    /// Cancellation was observed for a streaming execution.
+    Cancellation {
+        /// Cancellation reason associated with the stream.
+        reason: CancellationReason,
+    },
+    /// Bootstrap retry budget was exhausted before stream commit.
+    RetryExhausted {
+        /// Total attempts that were executed, including the initial attempt.
+        total_attempts: u8,
+        /// Underlying stream failure that exhausted retry budget.
+        failure: StreamFailure,
+    },
+    /// Provider stream failed after a valid response existed or stream committed.
+    ProviderStreamFailure {
+        /// Structured provider-neutral stream failure.
+        failure: StreamFailure,
+    },
 }
 
 fn validate_required_text(field: &'static str, value: &str) -> Result<(), CoreError> {
@@ -400,6 +673,48 @@ fn validate_optional_text(field: &'static str, value: Option<&str>) -> Result<()
     }
 
     Ok(())
+}
+
+fn validate_optional_duration(field: &'static str, value: Option<u64>) -> Result<(), CoreError> {
+    match value {
+        Some(value) => validate_duration(field, value),
+        None => Ok(()),
+    }
+}
+
+fn validate_duration(field: &'static str, value: u64) -> Result<(), CoreError> {
+    if (MIN_STREAMING_CONTROL_DURATION_MS..=MAX_STREAMING_CONTROL_DURATION_MS).contains(&value) {
+        Ok(())
+    } else {
+        Err(invalid_policy(
+            field,
+            "duration must be between 1 and 300000 milliseconds",
+        ))
+    }
+}
+
+fn validate_retry_count(value: u8) -> Result<(), CoreError> {
+    if value <= MAX_STREAMING_BOOTSTRAP_RETRY_COUNT {
+        Ok(())
+    } else {
+        Err(invalid_policy(
+            "streaming.bootstrap-retry-count",
+            "retry count must be between 0 and 10",
+        ))
+    }
+}
+
+fn invalid_policy(field: &'static str, message: impl Into<String>) -> CoreError {
+    CoreError::Streaming {
+        failure: StreamingFailure::InvalidPolicy {
+            field,
+            message: message.into(),
+        },
+    }
+}
+
+fn is_reserved_oxmux_metadata_key(name: &str) -> bool {
+    name.starts_with("oxmux.")
 }
 
 impl StreamFailure {
