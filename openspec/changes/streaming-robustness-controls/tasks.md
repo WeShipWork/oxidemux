@@ -40,4 +40,4 @@
 - [x] 6.2 Run `openspec validate streaming-robustness-controls --strict` and fix all spec validation issues.
 - [x] 6.3 Run `cargo fmt --all --check`.
 - [x] 6.4 Run `cargo test -p oxmux`.
-- [ ] 6.5 Run `mise run ci`.
+- [x] 6.5 Run `mise run ci`.
