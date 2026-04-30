@@ -10,7 +10,6 @@ provider/account state, management snapshots, usage/quota state, and structured
 errors. Desktop shells and platform adapters provide UI and OS integrations, but
 they must not redefine those core semantics.
 ## Requirements
-
 ### Requirement: Core facade exposes minimal proxy engine path
 The `oxmux` public facade SHALL expose the minimal proxy engine primitives needed for Rust consumers and tests to exercise a local OpenAI-compatible chat-completion smoke path through protocol, routing, provider execution, response mode handling, and structured errors without importing `oxidemux` or desktop-specific code.
 
@@ -45,11 +44,15 @@ The system SHALL provide an `oxmux` Rust library crate that is usable without GP
 - **THEN** it can construct the public core facade and start, query, and shut down the minimal local health runtime without launching the `oxidemux` binary, opening a window, starting IPC, or contacting an external provider
 
 ### Requirement: Minimal public facade for future core domains
-The `oxmux` crate SHALL expose a small public facade that establishes ownership of proxy lifecycle, local health runtime, provider/auth, provider execution, routing, protocol translation, configuration, streaming, management/status, usage/quota, domain error primitives, and a minimal concrete proxy request smoke path without implementing full provider SDK integration, outbound provider calls, credential storage, full proxy request handling, or real streaming transport adapters in this change.
+The `oxmux` crate SHALL expose a small public facade that establishes ownership of proxy lifecycle, local health runtime, local client authorization, provider/auth, provider execution, routing, protocol translation, configuration, streaming, management/status, usage/quota, domain error primitives, and a minimal concrete proxy request smoke path without implementing full provider SDK integration, outbound provider calls, credential storage, full proxy request handling, remote management panels, or real streaming transport adapters in this change.
 
 #### Scenario: Provider auth ownership is visible but not implemented
 - **WHEN** maintainers inspect the `oxmux` public API or documentation
 - **THEN** provider authentication and token refresh are identified as future core concerns without requiring OAuth UI, platform credential storage, or concrete provider clients in this phase
+
+#### Scenario: Local client authorization ownership is visible
+- **WHEN** maintainers inspect the `oxmux` public API or documentation after adding local client authorization boundaries
+- **THEN** local proxy client authorization, inference access, management/status/control access, redacted local client credential metadata, and structured unauthorized outcomes are represented as headless core concerns without requiring GPUI, desktop credential storage, OAuth UI, provider SDKs, or app-shell state
 
 #### Scenario: Provider execution ownership exposes deterministic mock boundaries
 - **WHEN** maintainers inspect the `oxmux` public API or documentation after adding provider execution primitives
@@ -69,7 +72,7 @@ The `oxmux` crate SHALL expose a small public facade that establishes ownership 
 
 #### Scenario: Management ownership includes local health runtime status
 - **WHEN** maintainers inspect the `oxmux` public API or documentation
-- **THEN** proxy lifecycle state, local health runtime status, provider listing, account health, usage, quota, and degraded service status are identified as core concerns while management endpoints beyond `/health` remain deferred
+- **THEN** proxy lifecycle state, local health runtime status, provider listing, account health, usage, quota, degraded service status, and protected management/status/control route boundaries are identified as core concerns while full remote management panels remain deferred
 
 ### Requirement: Core owns subscription proxy semantics
 The `oxmux` crate SHALL own the reusable subscription-aware proxy semantics needed to normalize local AI requests, represent model aliases, expose reasoning/thinking request compatibility primitives, accept app-supplied provider/account availability, route requests through deterministic policy, and return structured outcomes without depending on GPUI, tray/menu libraries, OAuth UI, platform credential storage, provider SDKs, or the `oxidemux` app shell.
@@ -182,3 +185,4 @@ Reload outcomes SHALL distinguish at least unchanged, replaced, and rejected can
 #### Scenario: Consumer reports rejected outcome
 - **WHEN** a layered reload hook returns a rejected outcome
 - **THEN** a Rust, CLI, or app-shell consumer can display structured candidate diagnostics while keeping the previous active runtime state visible
+
