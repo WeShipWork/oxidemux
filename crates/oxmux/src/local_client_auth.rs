@@ -51,8 +51,17 @@ impl LocalClientCredential {
     }
 
     pub(crate) fn matches(&self, presented: &str) -> bool {
-        self.secret == presented
+        fixed_secret_time_eq(self.secret.as_bytes(), presented.as_bytes())
     }
+}
+
+fn fixed_secret_time_eq(expected: &[u8], presented: &[u8]) -> bool {
+    let mut difference = expected.len() ^ presented.len();
+    for (index, expected_byte) in expected.iter().enumerate() {
+        let presented_byte = presented.get(index).copied().unwrap_or(0);
+        difference |= usize::from(expected_byte ^ presented_byte);
+    }
+    difference == 0
 }
 
 /// Local client credential construction error.
@@ -376,5 +385,28 @@ impl LocalClientAuthorizationFailureReason {
             Self::InvalidCredential => "invalid_credential",
             Self::MissingConfiguredCredential => "missing_configured_credential",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LocalClientCredential, fixed_secret_time_eq};
+
+    #[test]
+    fn local_client_credential_matches_exact_secret_only() {
+        let credential = LocalClientCredential::new("expected-token").expect("valid credential");
+
+        assert!(credential.matches("expected-token"));
+        assert!(!credential.matches("wrong-token"));
+        assert!(!credential.matches("expected-token-extra"));
+        assert!(!credential.matches("expected"));
+    }
+
+    #[test]
+    fn fixed_secret_time_comparison_rejects_length_mismatches() {
+        assert!(fixed_secret_time_eq(b"secret", b"secret"));
+        assert!(!fixed_secret_time_eq(b"secret", b"secret-extra"));
+        assert!(!fixed_secret_time_eq(b"secret", b"sec"));
+        assert!(!fixed_secret_time_eq(b"secret", b"secreu"));
     }
 }
