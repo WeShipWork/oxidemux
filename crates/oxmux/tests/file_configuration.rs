@@ -160,6 +160,14 @@ fn streaming_policy_validation_reports_structured_errors() {
         ConfigurationErrorKind::UnknownField,
         "streaming.unknown-streaming-field",
     );
+
+    assert_single_configuration_error(
+        ValidatedFileConfiguration::load_contents(&with_streaming(
+            "[streaming]\ntimeout-ms = 0\ncancellation = \"timeout\"\n",
+        )),
+        ConfigurationErrorKind::InvalidStreamingTimeout,
+        "streaming.timeout-ms",
+    );
 }
 
 #[test]
@@ -935,6 +943,24 @@ fn assert_error_value<T>(
                 }),
                 "expected {kind:?} at {field_path} with {invalid_value:?}, got {errors:?}"
             );
+            true
+        }
+        Err(_) | Ok(_) => false,
+    };
+
+    assert!(matched, "expected configuration error");
+}
+
+fn assert_single_configuration_error<T>(
+    result: Result<T, CoreError>,
+    kind: ConfigurationErrorKind,
+    field_path: &str,
+) {
+    let matched = match result {
+        Err(CoreError::Configuration { errors }) => {
+            assert_eq!(errors.len(), 1, "expected one error, got {errors:?}");
+            assert_eq!(errors[0].kind, kind);
+            assert_eq!(errors[0].field_path, field_path);
             true
         }
         Err(_) | Ok(_) => false,

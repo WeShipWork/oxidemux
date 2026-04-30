@@ -477,6 +477,11 @@ pub enum StreamingFailure {
         /// Structured failure associated with this state.
         failure: StreamFailure,
     },
+    /// Provider stream failed after a stream response existed or stream output committed.
+    ProviderStreamFailure {
+        /// Structured provider-neutral stream failure.
+        failure: StreamFailure,
+    },
     /// Bootstrap retries were exhausted before any stream event was emitted.
     RetryExhausted {
         /// Total attempts that were executed, including the initial attempt.
@@ -513,6 +518,9 @@ impl StreamingFailure {
         match self {
             Self::InvalidSequence { reason } => reason.message(),
             Self::PreStreamFailure { failure } => failure.message().to_string(),
+            Self::ProviderStreamFailure { failure } => {
+                format!("provider stream failed after commit: {}", failure.message())
+            }
             Self::RetryExhausted {
                 total_attempts,
                 failure,

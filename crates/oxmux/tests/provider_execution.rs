@@ -328,6 +328,47 @@ fn mock_provider_exhausts_bootstrap_retries_before_first_event() -> Result<(), C
 }
 
 #[test]
+fn mock_provider_retry_exhaustion_reports_only_executed_attempts() -> Result<(), CoreError> {
+    let policy = StreamingRobustnessPolicy::new(
+        None,
+        2,
+        None,
+        oxmux::StreamingCancellationPolicy::Disabled,
+    )?;
+    let executor = MockProviderHarness::new(
+        "mock-short-exhausted-streaming",
+        "Mock Short Exhausted Streaming",
+        ProtocolFamily::OpenAi,
+        AuthMethodCategory::ApiKey,
+        MockProviderOutcome::streaming_attempts(
+            policy,
+            vec![MockStreamingAttempt::fail_before_event(StreamFailure::new(
+                "bootstrap_failed",
+                "only configured attempt failed",
+            )?)],
+        ),
+    )?;
+
+    let error = executor.execute(ProviderExecutionRequest::new(
+        "mock-short-exhausted-streaming",
+        None,
+        canonical_request(ProtocolMetadata::open_ai())?,
+    )?);
+
+    assert!(matches!(
+        error,
+        Err(CoreError::Streaming {
+            failure: StreamingFailure::RetryExhausted {
+                total_attempts: 1,
+                ..
+            }
+        })
+    ));
+
+    Ok(())
+}
+
+#[test]
 fn mock_provider_reports_pre_event_timeout_and_cancellation() -> Result<(), CoreError> {
     let timeout_executor = MockProviderHarness::new(
         "mock-timeout-streaming",

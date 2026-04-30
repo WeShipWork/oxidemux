@@ -623,7 +623,7 @@ fn validate_streaming(
     let cancellation = validate_streaming_cancellation(raw.cancellation, source, errors);
 
     if matches!(cancellation, Some(StreamingCancellationPolicy::Timeout))
-        && matches!(timeout_ms, Some(None) | None)
+        && matches!(timeout_ms, Some(None))
     {
         errors.push(error(
             ConfigurationErrorKind::InvalidStreamingCancellation,

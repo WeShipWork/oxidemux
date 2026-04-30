@@ -182,7 +182,7 @@ impl StreamingRobustnessOutcome {
             }),
             StreamingRobustnessOutcomeKind::ProviderStreamFailure { failure } => {
                 Some(CoreError::Streaming {
-                    failure: crate::StreamingFailure::PreStreamFailure {
+                    failure: crate::StreamingFailure::ProviderStreamFailure {
                         failure: failure.clone(),
                     },
                 })

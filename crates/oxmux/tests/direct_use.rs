@@ -230,6 +230,24 @@ fn management_snapshot_replaces_latest_streaming_outcome() -> Result<(), CoreErr
             .any(|error| matches!(error, CoreError::Streaming { .. }))
     );
 
+    snapshot.record_streaming_outcome(StreamingRobustnessOutcome::new(
+        StreamingRobustnessOutcomeKind::ProviderStreamFailure {
+            failure: StreamFailure::new("stream_committed_error", "stream failed after commit")?,
+        },
+    ));
+    assert!(snapshot.errors.iter().any(|error| matches!(
+        error,
+        CoreError::Streaming {
+            failure: oxmux::StreamingFailure::ProviderStreamFailure { .. }
+        }
+    )));
+    assert!(!snapshot.errors.iter().any(|error| matches!(
+        error,
+        CoreError::Streaming {
+            failure: oxmux::StreamingFailure::PreStreamFailure { .. }
+        }
+    )));
+
     Ok(())
 }
 

@@ -664,7 +664,7 @@ fn execute_mock_streaming_attempts(
     )?);
     Err(CoreError::Streaming {
         failure: StreamingFailure::RetryExhausted {
-            total_attempts: failed_pre_event_attempts.max(policy.max_attempts()),
+            total_attempts: failed_pre_event_attempts,
             failure,
         },
     })
