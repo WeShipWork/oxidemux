@@ -502,7 +502,11 @@ fn classify_local_route(request: &LocalHttpRequest) -> LocalRoute {
     match (request.method.as_str(), request.path.as_str()) {
         ("GET", LOCAL_HEALTH_PATH) => LocalRoute::Health,
         ("POST", LOCAL_CHAT_COMPLETIONS_PATH) => LocalRoute::Inference,
-        (_, path) if path.starts_with(LOCAL_MANAGEMENT_PREFIX) => LocalRoute::Management,
+        (method, path)
+            if path.starts_with(LOCAL_MANAGEMENT_PREFIX) && matches!(method, "GET" | "POST") =>
+        {
+            LocalRoute::Management
+        }
         _ => LocalRoute::Unsupported,
     }
 }

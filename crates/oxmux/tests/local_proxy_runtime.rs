@@ -377,6 +377,28 @@ fn unsupported_method_and_path_return_json_404() -> Result<(), Box<dyn std::erro
 }
 
 #[test]
+fn unsupported_management_method_returns_json_404() -> Result<(), Box<dyn std::error::Error>> {
+    let mut runtime = LocalHealthRuntime::start_with_proxy_route(
+        LocalHealthRuntimeConfig::loopback(0),
+        proxy_route_config()?,
+    )?;
+    let response = raw_request(
+        runtime.bound_endpoint().socket_addr,
+        "DELETE /v0/management/status HTTP/1.1\r\nHost: localhost\r\n\r\n",
+    )?;
+
+    assert!(
+        response.starts_with("HTTP/1.1 404 Not Found\r\n"),
+        "unexpected response: {response:?}"
+    );
+    assert!(response.contains("Content-Type: application/json\r\n"));
+    assert!(response.contains(r#""code":"unsupported_path""#));
+
+    runtime.shutdown()?;
+    Ok(())
+}
+
+#[test]
 fn bind_failure_produces_structured_failed_status() -> Result<(), Box<dyn std::error::Error>> {
     let occupied_listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0)))?;
     let occupied_addr = occupied_listener.local_addr()?;
