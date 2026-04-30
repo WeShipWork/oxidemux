@@ -31,6 +31,7 @@ const MAX_LOCAL_HEALTH_REQUEST_BYTES: usize = 8 * 1024;
 const MAX_LOCAL_PROXY_REQUEST_BYTES: usize = 64 * 1024;
 const LOCAL_CHAT_COMPLETIONS_PATH: &str = crate::MINIMAL_CHAT_COMPLETIONS_PATH;
 const LOCAL_MANAGEMENT_PREFIX: &str = "/v0/management/";
+const LOCAL_CLIENT_AUTHENTICATE_HEADER: &str = "WWW-Authenticate: Bearer realm=\"oxmux\"\r\n";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 /// Loopback listen configuration for the local health runtime.
@@ -805,8 +806,13 @@ fn write_json_response(
         502 => "Bad Gateway",
         _ => "Internal Server Error",
     };
+    let authenticate_header = if status_code == 401 {
+        LOCAL_CLIENT_AUTHENTICATE_HEADER
+    } else {
+        ""
+    };
     let response = format!(
-        "HTTP/1.1 {status_code} {reason}\r\nContent-Length: {}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{body}",
+        "HTTP/1.1 {status_code} {reason}\r\nContent-Length: {}\r\nContent-Type: application/json\r\n{authenticate_header}Connection: close\r\n\r\n{body}",
         body.len()
     );
     stream

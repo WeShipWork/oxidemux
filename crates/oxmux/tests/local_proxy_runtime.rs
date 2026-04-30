@@ -155,6 +155,7 @@ fn protected_chat_completion_requires_valid_inference_authorization()
 
     let missing_response = post_chat_completion(socket_addr, body)?;
     assert!(missing_response.starts_with("HTTP/1.1 401 Unauthorized\r\n"));
+    assert!(missing_response.contains("WWW-Authenticate: Bearer realm=\"oxmux\"\r\n"));
     assert!(missing_response.contains(r#""code":"local_client_unauthorized""#));
     assert!(missing_response.contains(r#""scope":"inference""#));
     assert!(!missing_response.contains("inference-token"));
@@ -191,6 +192,7 @@ fn management_boundary_uses_distinct_authorization_scope() -> Result<(), Box<dyn
 
     let inference_only = management_request(socket_addr, Some("Bearer inference-token"))?;
     assert!(inference_only.starts_with("HTTP/1.1 401 Unauthorized\r\n"));
+    assert!(inference_only.contains("WWW-Authenticate: Bearer realm=\"oxmux\"\r\n"));
     assert!(inference_only.contains(r#""scope":"management""#));
     assert!(inference_only.contains(r#""reason":"invalid_credential""#));
     assert!(!inference_only.contains("management-token"));
@@ -207,6 +209,7 @@ fn management_boundary_uses_distinct_authorization_scope() -> Result<(), Box<dyn
         Some("Bearer management-token"),
     )?;
     assert!(management_only.starts_with("HTTP/1.1 401 Unauthorized\r\n"));
+    assert!(management_only.contains("WWW-Authenticate: Bearer realm=\"oxmux\"\r\n"));
     assert!(management_only.contains(r#""scope":"inference""#));
 
     runtime.shutdown()?;
@@ -257,6 +260,7 @@ fn bearer_parsing_returns_structured_unauthorized_reasons() -> Result<(), Box<dy
     ] {
         let response = post_chat_completion_with_authorization(socket_addr, body, authorization)?;
         assert!(response.starts_with("HTTP/1.1 401 Unauthorized\r\n"));
+        assert!(response.contains("WWW-Authenticate: Bearer realm=\"oxmux\"\r\n"));
         assert!(response.contains(&format!(r#""reason":"{reason}""#)));
         assert!(!response.contains("expected-token"));
     }
@@ -270,10 +274,12 @@ fn bearer_parsing_returns_structured_unauthorized_reasons() -> Result<(), Box<dy
         ),
     )?;
     assert!(duplicate_authorization.starts_with("HTTP/1.1 401 Unauthorized\r\n"));
+    assert!(duplicate_authorization.contains("WWW-Authenticate: Bearer realm=\"oxmux\"\r\n"));
     assert!(duplicate_authorization.contains(r#""reason":"malformed_credential""#));
 
     let missing_configured = management_request(socket_addr, Some("Bearer expected-token"))?;
     assert!(missing_configured.starts_with("HTTP/1.1 401 Unauthorized\r\n"));
+    assert!(missing_configured.contains("WWW-Authenticate: Bearer realm=\"oxmux\"\r\n"));
     assert!(missing_configured.contains(r#""reason":"missing_configured_credential""#));
 
     runtime.shutdown()?;
