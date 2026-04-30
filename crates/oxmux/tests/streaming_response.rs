@@ -2,9 +2,11 @@
 
 use oxmux::{
     CancellationReason, CanonicalProtocolResponse, CoreError, InvalidStreamSequence,
-    ProtocolMetadata, ProtocolPayload, ProtocolPayloadBody, ProtocolResponseStatus, ResponseMode,
-    StreamContent, StreamEvent, StreamFailure, StreamMetadata, StreamTerminalState,
-    StreamingFailure, StreamingResponse,
+    OXMUX_KEEPALIVE_METADATA_KEY, OXMUX_RETRY_EXHAUSTED_METADATA_KEY,
+    OXMUX_RETRY_SUMMARY_METADATA_KEY, OXMUX_TIMEOUT_METADATA_KEY, ProtocolMetadata,
+    ProtocolPayload, ProtocolPayloadBody, ProtocolResponseStatus, ResponseMode, StreamContent,
+    StreamEvent, StreamFailure, StreamMetadata, StreamTerminalState, StreamingCancellationPolicy,
+    StreamingFailure, StreamingResponse, StreamingRobustnessPolicy,
 };
 
 #[test]
@@ -63,6 +65,84 @@ fn metadata_only_stream_is_valid() -> Result<(), CoreError> {
 
     assert!(matches!(response.events()[0], StreamEvent::Metadata(_)));
     assert_eq!(response.terminal(), Some(&StreamTerminalState::Completed));
+
+    Ok(())
+}
+
+#[test]
+fn streaming_policy_defaults_are_disabled_and_validated() -> Result<(), CoreError> {
+    let default_policy = StreamingRobustnessPolicy::default();
+    assert!(default_policy.is_disabled());
+    assert_eq!(default_policy.max_attempts(), 1);
+
+    let policy = StreamingRobustnessPolicy::new(
+        Some(15_000),
+        2,
+        Some(120_000),
+        StreamingCancellationPolicy::ClientDisconnect,
+    )?;
+    assert_eq!(policy.keepalive_interval_ms, Some(15_000));
+    assert_eq!(policy.bootstrap_retry_count, 2);
+    assert_eq!(policy.max_attempts(), 3);
+    assert_eq!(policy.timeout_ms, Some(120_000));
+
+    assert!(matches!(
+        StreamingRobustnessPolicy::new(Some(0), 0, None, StreamingCancellationPolicy::Disabled),
+        Err(CoreError::Streaming {
+            failure: StreamingFailure::InvalidPolicy {
+                field: "streaming.keepalive-interval-ms",
+                ..
+            }
+        })
+    ));
+    assert!(matches!(
+        StreamingRobustnessPolicy::new(None, 0, None, StreamingCancellationPolicy::Timeout),
+        Err(CoreError::Streaming {
+            failure: StreamingFailure::InvalidPolicy {
+                field: "streaming.cancellation",
+                ..
+            }
+        })
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn reserved_oxmux_metadata_requires_typed_helpers() -> Result<(), CoreError> {
+    assert!(matches!(
+        StreamMetadata::new(OXMUX_KEEPALIVE_METADATA_KEY, "true"),
+        Err(CoreError::Streaming {
+            failure: StreamingFailure::InvalidSequence {
+                reason: InvalidStreamSequence::ReservedMetadataKey { .. },
+            }
+        })
+    ));
+
+    let failure = StreamFailure::new("upstream_bootstrap", "upstream failed before first byte")?;
+    let keepalive = StreamMetadata::keepalive();
+    let timeout = StreamMetadata::timeout(30_000)?;
+    let retry_summary = StreamMetadata::retry_summary(1, 2)?;
+    let retry_exhausted = StreamMetadata::retry_exhausted(3, &failure)?;
+
+    assert_eq!(keepalive.name(), OXMUX_KEEPALIVE_METADATA_KEY);
+    assert_eq!(timeout.name(), OXMUX_TIMEOUT_METADATA_KEY);
+    assert_eq!(retry_summary.name(), OXMUX_RETRY_SUMMARY_METADATA_KEY);
+    assert_eq!(retry_exhausted.name(), OXMUX_RETRY_EXHAUSTED_METADATA_KEY);
+
+    let response = StreamingResponse::new(vec![
+        StreamEvent::Metadata(keepalive),
+        StreamEvent::Metadata(timeout),
+        StreamEvent::Terminal(StreamTerminalState::cancelled(CancellationReason::Timeout)),
+    ])?;
+
+    assert_eq!(response.events().len(), 3);
+    assert!(matches!(
+        response.terminal(),
+        Some(StreamTerminalState::Cancelled {
+            reason: CancellationReason::Timeout,
+        })
+    ));
 
     Ok(())
 }
@@ -180,6 +260,55 @@ fn streaming_error_display_is_human_readable() -> Result<(), CoreError> {
     };
 
     assert_eq!(error.to_string(), "streaming failed: transport unavailable");
+
+    Ok(())
+}
+
+#[test]
+fn pre_stream_retry_timeout_and_cancellation_failures_are_matchable() -> Result<(), CoreError> {
+    let failure = StreamFailure::new("bootstrap_failed", "bootstrap failed")?;
+    let retry_error = CoreError::Streaming {
+        failure: StreamingFailure::RetryExhausted {
+            total_attempts: 3,
+            failure: failure.clone(),
+        },
+    };
+    let timeout_error = CoreError::Streaming {
+        failure: StreamingFailure::PreStreamTimeout {
+            timeout_ms: 30_000,
+            failure: failure.clone(),
+        },
+    };
+    let cancellation_error = CoreError::Streaming {
+        failure: StreamingFailure::PreStreamCancellation {
+            reason: CancellationReason::ClientDisconnected,
+            failure,
+        },
+    };
+
+    assert!(matches!(
+        retry_error,
+        CoreError::Streaming {
+            failure: StreamingFailure::RetryExhausted {
+                total_attempts: 3,
+                ..
+            }
+        }
+    ));
+    assert!(
+        timeout_error
+            .to_string()
+            .contains("timed out before first event")
+    );
+    assert!(matches!(
+        cancellation_error,
+        CoreError::Streaming {
+            failure: StreamingFailure::PreStreamCancellation {
+                reason: CancellationReason::ClientDisconnected,
+                ..
+            }
+        }
+    ));
 
     Ok(())
 }

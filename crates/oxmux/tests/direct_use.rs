@@ -12,8 +12,9 @@ use oxmux::{
     LocalRouteProtection, LocalRouteProtectionMetadata, ManagementSnapshot, MeteredValue,
     ProtocolFamily, ProtocolMetadata, ProtocolPayload, ProviderCapability, ProviderSummary,
     ProxyLifecycleState, QuotaState, QuotaSummary, ResponseMode, RoutingDefault, StreamEvent,
-    StreamMetadata, StreamTerminalState, StreamingResponse, UptimeMetadata, UsageSummary,
-    core_identity,
+    StreamFailure, StreamMetadata, StreamTerminalState, StreamingResponse,
+    StreamingRobustnessOutcome, StreamingRobustnessOutcomeKind, StreamingRobustnessPolicy,
+    UptimeMetadata, UsageSummary, core_identity,
 };
 
 #[test]
@@ -148,6 +149,7 @@ fn management_snapshot_can_be_constructed_from_in_memory_values() {
             usage_collection_enabled: false,
             routing_default: RoutingDefault::named("manual"),
             provider_references: vec!["openai".to_string()],
+            streaming: StreamingRobustnessPolicy::default(),
         },
         file_configuration: None,
         layered_configuration: None,
@@ -169,6 +171,7 @@ fn management_snapshot_can_be_constructed_from_in_memory_values() {
             },
         },
         local_route_protection: LocalRouteProtectionMetadata::disabled(),
+        latest_streaming_outcome: None,
         warnings: vec!["quota data is placeholder-only".to_string()],
         errors: vec![CoreError::UsageQuotaSummary {
             message: "quota fetch deferred".to_string(),
@@ -178,6 +181,56 @@ fn management_snapshot_can_be_constructed_from_in_memory_values() {
     assert_eq!(snapshot.identity.crate_name, "oxmux");
     assert_eq!(snapshot.providers.len(), 1);
     assert_eq!(snapshot.warnings, ["quota data is placeholder-only"]);
+}
+
+#[test]
+fn management_snapshot_replaces_latest_streaming_outcome() -> Result<(), CoreError> {
+    let timeout = StreamingRobustnessOutcome::new(StreamingRobustnessOutcomeKind::Timeout {
+        timeout_ms: 30_000,
+    })
+    .with_provider_context("mock-openai", Some("default".to_string()));
+    let retry_exhausted =
+        StreamingRobustnessOutcome::new(StreamingRobustnessOutcomeKind::RetryExhausted {
+            total_attempts: 3,
+            failure: StreamFailure::new("retry_exhausted", "retry budget exhausted")?,
+        })
+        .with_provider_context("mock-claude", None);
+    let mut snapshot = ManagementSnapshot::inert_bootstrap().with_streaming_outcome(timeout);
+
+    assert!(matches!(
+        snapshot.latest_streaming_outcome,
+        Some(StreamingRobustnessOutcome {
+            kind: StreamingRobustnessOutcomeKind::Timeout { timeout_ms: 30_000 },
+            provider_id: Some(ref provider_id),
+            account_id: Some(ref account_id),
+        }) if provider_id == "mock-openai" && account_id == "default"
+    ));
+
+    snapshot.record_streaming_outcome(retry_exhausted);
+    assert!(matches!(
+        snapshot.latest_streaming_outcome,
+        Some(StreamingRobustnessOutcome {
+            kind: StreamingRobustnessOutcomeKind::RetryExhausted { total_attempts: 3, .. },
+            provider_id: Some(ref provider_id),
+            account_id: None,
+        }) if provider_id == "mock-claude"
+    ));
+    assert_eq!(
+        snapshot
+            .warnings
+            .iter()
+            .filter(|warning| warning.starts_with("streaming: "))
+            .count(),
+        1
+    );
+    assert!(
+        snapshot
+            .errors
+            .iter()
+            .any(|error| matches!(error, CoreError::Streaming { .. }))
+    );
+
+    Ok(())
 }
 
 #[test]

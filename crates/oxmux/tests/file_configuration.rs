@@ -10,7 +10,8 @@ use oxmux::{
     AutoStartIntent, ConfigurationBoundary, ConfigurationErrorKind, ConfigurationSourceMetadata,
     CoreError, FileConfigurationState, InvalidConfigurationValue, LayeredConfigurationInput,
     LayeredConfigurationReloadOutcome, LayeredConfigurationState, LoggingSetting,
-    ManagementSnapshot, ProtocolFamily, QuotaState, RoutingTarget, ValidatedFileConfiguration,
+    ManagementSnapshot, ProtocolFamily, QuotaState, RoutingTarget, StreamingCancellationPolicy,
+    ValidatedFileConfiguration,
 };
 
 const VALID_TOML: &str = include_str!("fixtures/file_configuration/valid.toml");
@@ -47,8 +48,118 @@ fn valid_toml_loads_typed_configuration() -> Result<(), Box<dyn Error>> {
     assert_eq!(configuration.logging, LoggingSetting::Standard);
     assert!(configuration.usage_collection_enabled);
     assert_eq!(configuration.auto_start, AutoStartIntent::Disabled);
+    assert!(configuration.streaming.is_disabled());
     assert!(configuration.warnings.is_empty());
     Ok(())
+}
+
+#[test]
+fn streaming_policy_toml_loads_typed_configuration() -> Result<(), Box<dyn Error>> {
+    let configuration = ValidatedFileConfiguration::load_contents(&with_streaming(
+        r#"
+[streaming]
+keepalive-interval-ms = 15000
+bootstrap-retry-count = 2
+timeout-ms = 120000
+cancellation = "client-disconnect"
+"#,
+    ))?;
+
+    assert_eq!(configuration.streaming.keepalive_interval_ms, Some(15_000));
+    assert_eq!(configuration.streaming.bootstrap_retry_count, 2);
+    assert_eq!(configuration.streaming.timeout_ms, Some(120_000));
+    assert_eq!(
+        configuration.streaming.cancellation,
+        StreamingCancellationPolicy::ClientDisconnect
+    );
+    assert_eq!(
+        configuration.configuration_snapshot().streaming,
+        configuration.streaming
+    );
+    Ok(())
+}
+
+#[test]
+fn streaming_policy_partial_defaults_and_timeout_metadata_policy_load() -> Result<(), Box<dyn Error>>
+{
+    let configuration = ValidatedFileConfiguration::load_contents(&with_streaming(
+        r#"
+[streaming]
+timeout-ms = 30000
+"#,
+    ))?;
+
+    assert_eq!(configuration.streaming.keepalive_interval_ms, None);
+    assert_eq!(configuration.streaming.bootstrap_retry_count, 0);
+    assert_eq!(configuration.streaming.timeout_ms, Some(30_000));
+    assert_eq!(
+        configuration.streaming.cancellation,
+        StreamingCancellationPolicy::Disabled
+    );
+    Ok(())
+}
+
+#[test]
+fn streaming_policy_validation_reports_structured_errors() {
+    for (toml, kind, field, invalid_value) in [
+        (
+            with_streaming("[streaming]\nkeepalive-interval-ms = 0\n"),
+            ConfigurationErrorKind::InvalidStreamingKeepaliveInterval,
+            "streaming.keepalive-interval-ms",
+            InvalidConfigurationValue::OutOfRange,
+        ),
+        (
+            with_streaming("[streaming]\ntimeout-ms = -1\n"),
+            ConfigurationErrorKind::InvalidStreamingTimeout,
+            "streaming.timeout-ms",
+            InvalidConfigurationValue::OutOfRange,
+        ),
+        (
+            with_streaming("[streaming]\nbootstrap-retry-count = 11\n"),
+            ConfigurationErrorKind::InvalidStreamingBootstrapRetryCount,
+            "streaming.bootstrap-retry-count",
+            InvalidConfigurationValue::OutOfRange,
+        ),
+        (
+            with_streaming("[streaming]\nbootstrap-retry-count = 1.5\n"),
+            ConfigurationErrorKind::InvalidStreamingBootstrapRetryCount,
+            "streaming.bootstrap-retry-count",
+            InvalidConfigurationValue::Malformed,
+        ),
+        (
+            with_streaming("[streaming]\ntimeout-ms = \"fast\"\n"),
+            ConfigurationErrorKind::InvalidStreamingTimeout,
+            "streaming.timeout-ms",
+            InvalidConfigurationValue::Malformed,
+        ),
+        (
+            with_streaming("[streaming]\ncancellation = \"socket-close\"\n"),
+            ConfigurationErrorKind::InvalidStreamingCancellation,
+            "streaming.cancellation",
+            InvalidConfigurationValue::Unsupported,
+        ),
+        (
+            with_streaming("[streaming]\ncancellation = \"timeout\"\n"),
+            ConfigurationErrorKind::InvalidStreamingCancellation,
+            "streaming.cancellation",
+            InvalidConfigurationValue::Missing,
+        ),
+    ] {
+        assert_error_value(
+            ValidatedFileConfiguration::load_contents(&toml),
+            kind,
+            field,
+            invalid_value,
+        );
+    }
+
+    assert_error_kind(
+        ValidatedFileConfiguration::load_contents(&with_streaming(
+            "[streaming]\nunknown-streaming-field = true\n",
+        )),
+        ConfigurationErrorKind::UnknownField,
+        "streaming.unknown-streaming-field",
+    );
 }
 
 #[test]
@@ -485,6 +596,43 @@ fallback-enabled = false
 }
 
 #[test]
+fn layered_streaming_policy_user_scalars_override_defaults() -> Result<(), Box<dyn Error>> {
+    let mut state = LayeredConfigurationState::new();
+    let defaults =
+        with_streaming("[streaming]\nkeepalive-interval-ms = 15000\nbootstrap-retry-count = 1\n");
+    let user = r#"
+[streaming]
+timeout-ms = 45000
+cancellation = "timeout"
+"#;
+
+    let outcome = state.replace(vec![
+        LayeredConfigurationInput::bundled_defaults(defaults),
+        LayeredConfigurationInput::user_owned(
+            user,
+            ConfigurationSourceMetadata::for_path("user.toml"),
+        ),
+    ]);
+
+    assert!(matches!(
+        outcome,
+        LayeredConfigurationReloadOutcome::Replaced { .. }
+    ));
+    let configuration = &state
+        .active()
+        .ok_or("expected active layered configuration")?
+        .configuration;
+    assert_eq!(configuration.streaming.keepalive_interval_ms, Some(15_000));
+    assert_eq!(configuration.streaming.bootstrap_retry_count, 1);
+    assert_eq!(configuration.streaming.timeout_ms, Some(45_000));
+    assert_eq!(
+        configuration.streaming.cancellation,
+        StreamingCancellationPolicy::Timeout
+    );
+    Ok(())
+}
+
+#[test]
 fn layered_rejected_candidates_preserve_prior_active_configuration() -> Result<(), Box<dyn Error>> {
     let mut state = LayeredConfigurationState::new();
     let first = state.replace(vec![LayeredConfigurationInput::bundled_defaults(
@@ -797,6 +945,10 @@ fn assert_error_value<T>(
 
 fn with_replace(from: &str, to: &str) -> String {
     VALID_TOML.replacen(from, to, 1)
+}
+
+fn with_streaming(streaming: &str) -> String {
+    format!("{VALID_TOML}\n{streaming}")
 }
 
 fn duplicate_provider_toml() -> String {

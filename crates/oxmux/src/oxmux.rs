@@ -75,8 +75,8 @@ pub use protocol::{
 };
 pub use provider::{
     AccountSummary, AuthMethodCategory, AuthState, DegradedReason, LastCheckedMetadata,
-    MockProviderAccount, MockProviderHarness, MockProviderOutcome, ProtocolFamily,
-    ProviderCapability, ProviderExecutionFailure, ProviderExecutionMetadata,
+    MockProviderAccount, MockProviderHarness, MockProviderOutcome, MockStreamingAttempt,
+    ProtocolFamily, ProviderCapability, ProviderExecutionFailure, ProviderExecutionMetadata,
     ProviderExecutionOutcome, ProviderExecutionRequest, ProviderExecutionResult, ProviderExecutor,
     ProviderSummary,
 };
@@ -87,9 +87,13 @@ pub use routing::{
     RoutingSkipReason, RoutingTarget, RoutingTargetAvailability, SkippedRoutingCandidate,
 };
 pub use streaming::{
-    CancellationReason, InvalidStreamSequence, ResponseMode, StreamContent, StreamEvent,
-    StreamFailure, StreamMetadata, StreamTerminalState, StreamingBoundary, StreamingFailure,
-    StreamingResponse,
+    CancellationReason, InvalidStreamSequence, MAX_STREAMING_BOOTSTRAP_RETRY_COUNT,
+    MAX_STREAMING_CONTROL_DURATION_MS, MIN_STREAMING_CONTROL_DURATION_MS,
+    OXMUX_KEEPALIVE_METADATA_KEY, OXMUX_RETRY_EXHAUSTED_METADATA_KEY,
+    OXMUX_RETRY_SUMMARY_METADATA_KEY, OXMUX_TIMEOUT_METADATA_KEY, ResponseMode, StreamContent,
+    StreamEvent, StreamFailure, StreamMetadata, StreamTerminalState, StreamingBoundary,
+    StreamingCancellationPolicy, StreamingFailure, StreamingResponse, StreamingRobustnessOutcome,
+    StreamingRobustnessOutcomeKind, StreamingRobustnessPolicy,
 };
 pub use usage::{MeteredValue, QuotaState, QuotaSummary, UsageSummary};
 

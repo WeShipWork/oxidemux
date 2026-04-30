@@ -8,10 +8,14 @@ use super::file::{
 };
 use super::raw::{
     RawAccountConfiguration, RawConfiguration, RawProviderConfiguration, RawProxyConfiguration,
-    RawRoutingDefaultConfiguration,
+    RawRoutingDefaultConfiguration, RawStreamingConfiguration,
 };
 use crate::provider::ProtocolFamily;
 use crate::routing::{ModelRoute, RoutingCandidate, RoutingPolicy, RoutingTarget};
+use crate::streaming::{
+    MAX_STREAMING_BOOTSTRAP_RETRY_COUNT, MAX_STREAMING_CONTROL_DURATION_MS,
+    MIN_STREAMING_CONTROL_DURATION_MS, StreamingCancellationPolicy, StreamingRobustnessPolicy,
+};
 use crate::{
     ConfigurationError, ConfigurationErrorKind, ConfigurationSourceMetadata, CoreError,
     InvalidConfigurationValue,
@@ -49,6 +53,7 @@ pub(super) fn validate_raw_configuration(
     let usage_collection_enabled =
         validate_usage_collection(raw.observability.usage_collection, &source, &mut errors);
     let auto_start = validate_auto_start(raw.lifecycle.auto_start, &source, &mut errors);
+    let streaming = validate_streaming(raw.streaming, &source, &mut errors);
 
     if !errors.is_empty() {
         return Err(configuration_failure(errors));
@@ -66,6 +71,7 @@ pub(super) fn validate_raw_configuration(
     let logging = logging.unwrap_or(LoggingSetting::Standard);
     let usage_collection_enabled = usage_collection_enabled.unwrap_or(true);
     let auto_start = auto_start.unwrap_or(AutoStartIntent::Disabled);
+    let streaming = streaming.unwrap_or_default();
     let routing_policy = build_routing_policy(&routing_default_groups);
 
     Ok(ValidatedFileConfiguration {
@@ -78,6 +84,7 @@ pub(super) fn validate_raw_configuration(
         logging,
         usage_collection_enabled,
         auto_start,
+        streaming,
         warnings: Vec::new(),
     })
 }
@@ -589,6 +596,153 @@ fn validate_auto_start(
             None
         }
         None => Some(AutoStartIntent::Disabled),
+    }
+}
+
+fn validate_streaming(
+    raw: RawStreamingConfiguration,
+    source: &ConfigurationSourceMetadata,
+    errors: &mut Vec<ConfigurationError>,
+) -> Option<StreamingRobustnessPolicy> {
+    let keepalive_interval_ms = validate_optional_streaming_duration(
+        raw.keepalive_interval_ms,
+        "streaming.keepalive-interval-ms",
+        ConfigurationErrorKind::InvalidStreamingKeepaliveInterval,
+        source,
+        errors,
+    );
+    let bootstrap_retry_count =
+        validate_optional_retry_count(raw.bootstrap_retry_count, source, errors);
+    let timeout_ms = validate_optional_streaming_duration(
+        raw.timeout_ms,
+        "streaming.timeout-ms",
+        ConfigurationErrorKind::InvalidStreamingTimeout,
+        source,
+        errors,
+    );
+    let cancellation = validate_streaming_cancellation(raw.cancellation, source, errors);
+
+    if matches!(cancellation, Some(StreamingCancellationPolicy::Timeout))
+        && matches!(timeout_ms, Some(None) | None)
+    {
+        errors.push(error(
+            ConfigurationErrorKind::InvalidStreamingCancellation,
+            "streaming.cancellation",
+            InvalidConfigurationValue::Missing,
+            source,
+        ));
+        return None;
+    }
+
+    match (
+        keepalive_interval_ms,
+        bootstrap_retry_count,
+        timeout_ms,
+        cancellation,
+    ) {
+        (
+            Some(keepalive_interval_ms),
+            Some(bootstrap_retry_count),
+            Some(timeout_ms),
+            Some(cancellation),
+        ) => Some(StreamingRobustnessPolicy {
+            keepalive_interval_ms,
+            bootstrap_retry_count,
+            timeout_ms,
+            cancellation,
+        }),
+        _ => None,
+    }
+}
+
+fn validate_optional_streaming_duration(
+    value: Option<toml::Value>,
+    field: &'static str,
+    kind: ConfigurationErrorKind,
+    source: &ConfigurationSourceMetadata,
+    errors: &mut Vec<ConfigurationError>,
+) -> Option<Option<u64>> {
+    match value {
+        Some(toml::Value::Integer(value))
+            if (MIN_STREAMING_CONTROL_DURATION_MS as i64
+                ..=MAX_STREAMING_CONTROL_DURATION_MS as i64)
+                .contains(&value) =>
+        {
+            Some(Some(value as u64))
+        }
+        Some(toml::Value::Integer(_)) => {
+            errors.push(error(
+                kind,
+                field,
+                InvalidConfigurationValue::OutOfRange,
+                source,
+            ));
+            None
+        }
+        Some(_) => {
+            errors.push(error(
+                kind,
+                field,
+                InvalidConfigurationValue::Malformed,
+                source,
+            ));
+            None
+        }
+        None => Some(None),
+    }
+}
+
+fn validate_optional_retry_count(
+    value: Option<toml::Value>,
+    source: &ConfigurationSourceMetadata,
+    errors: &mut Vec<ConfigurationError>,
+) -> Option<u8> {
+    match value {
+        Some(toml::Value::Integer(value))
+            if (0..=i64::from(MAX_STREAMING_BOOTSTRAP_RETRY_COUNT)).contains(&value) =>
+        {
+            Some(value as u8)
+        }
+        Some(toml::Value::Integer(_)) => {
+            errors.push(error(
+                ConfigurationErrorKind::InvalidStreamingBootstrapRetryCount,
+                "streaming.bootstrap-retry-count",
+                InvalidConfigurationValue::OutOfRange,
+                source,
+            ));
+            None
+        }
+        Some(_) => {
+            errors.push(error(
+                ConfigurationErrorKind::InvalidStreamingBootstrapRetryCount,
+                "streaming.bootstrap-retry-count",
+                InvalidConfigurationValue::Malformed,
+                source,
+            ));
+            None
+        }
+        None => Some(0),
+    }
+}
+
+fn validate_streaming_cancellation(
+    value: Option<String>,
+    source: &ConfigurationSourceMetadata,
+    errors: &mut Vec<ConfigurationError>,
+) -> Option<StreamingCancellationPolicy> {
+    match value.as_deref() {
+        Some("disabled") | None => Some(StreamingCancellationPolicy::Disabled),
+        Some("client-disconnect") => Some(StreamingCancellationPolicy::ClientDisconnect),
+        Some("timeout") => Some(StreamingCancellationPolicy::Timeout),
+        Some(_) => {
+            errors.push(error(
+                ConfigurationErrorKind::InvalidStreamingCancellation,
+                "streaming.cancellation",
+                InvalidConfigurationValue::Unsupported,
+                source,
+            ));
+            None
+        }
     }
 }
 

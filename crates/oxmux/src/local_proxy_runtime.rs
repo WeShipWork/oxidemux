@@ -180,6 +180,7 @@ impl LocalHealthRuntimeStatus {
             usage: UsageSummary::zero(),
             quota: QuotaSummary::unknown(),
             local_route_protection: self.local_route_protection,
+            latest_streaming_outcome: None,
             warnings: Vec::new(),
             errors,
         }
@@ -331,6 +332,7 @@ impl LocalHealthRuntime {
             usage_collection_enabled: false,
             routing_default: crate::RoutingDefault::named("manual"),
             provider_references: Vec::new(),
+            streaming: crate::StreamingRobustnessPolicy::default(),
         })
     }
 
