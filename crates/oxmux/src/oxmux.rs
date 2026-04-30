@@ -13,6 +13,8 @@
 pub mod configuration;
 /// Structured error types shared by headless core boundaries.
 pub mod errors;
+/// Local client authorization contracts for loopback proxy access.
+pub mod local_client_auth;
 /// Local loopback runtime contracts for health and minimal proxy serving.
 pub mod local_proxy_runtime;
 /// Management snapshot and lifecycle state contracts.
@@ -43,6 +45,13 @@ pub use configuration::{
 pub use errors::{
     ConfigurationError, ConfigurationErrorKind, ConfigurationSourceMetadata, CoreError,
     InvalidConfigurationValue,
+};
+pub use local_client_auth::{
+    LocalClientAuthorizationAttempt, LocalClientAuthorizationFailure,
+    LocalClientAuthorizationFailureReason, LocalClientAuthorizationOutcome,
+    LocalClientAuthorizationPolicy, LocalClientAuthorizationPolicyMetadata, LocalClientCredential,
+    LocalClientCredentialError, LocalClientRouteScope, LocalRouteProtection,
+    LocalRouteProtectionMetadata, RedactedLocalClientCredentialMetadata,
 };
 pub use local_proxy_runtime::{
     LOCAL_HEALTH_PATH, LOCAL_HEALTH_RESPONSE_BODY, LocalHealthRuntime, LocalHealthRuntimeConfig,

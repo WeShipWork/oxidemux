@@ -1,7 +1,5 @@
-## Purpose
+## MODIFIED Requirements
 
-Define the `oxmux` local proxy health runtime used for loopback-only smoke testing of the reusable core without desktop, provider, routing, or app-shell dependencies.
-## Requirements
 ### Requirement: Runtime dispatches minimal proxy route
 The `oxmux` local runtime SHALL preserve the stable health endpoint while also classifying loopback requests by route category and dispatching a bounded loopback `POST /v1/chat/completions` request to the minimal proxy engine path when configured with deterministic core proxy inputs and valid local client authorization when that route is protected.
 
@@ -60,17 +58,6 @@ The `oxmux` local runtime SHALL parse only the bounded local HTTP request data n
 - **WHEN** maintainers inspect or exercise `/v0/management/*` behavior in this change
 - **THEN** the runtime keeps the boundary loopback-only, non-HTML, non-provider-credential-bearing, side-effect-free, and independent from remote management panels until a later OpenSpec change defines concrete management operations
 
-### Requirement: Core starts local health runtime
-The system SHALL provide an `oxmux` local proxy health runtime that binds a configurable loopback HTTP endpoint from deterministic configuration without launching `oxidemux` or requiring external providers.
-
-#### Scenario: Runtime binds configured loopback endpoint
-- **WHEN** Rust code starts the `oxmux` local proxy health runtime with a valid localhost listen address and port
-- **THEN** the runtime binds an HTTP listener on that endpoint and reports the actual bound endpoint through the core facade
-
-#### Scenario: Runtime rejects non-local exposure
-- **WHEN** runtime configuration requests a non-loopback listen address
-- **THEN** `oxmux` returns a structured configuration or lifecycle error instead of binding a public network interface
-
 ### Requirement: Runtime exposes stable health endpoint
 The system SHALL expose a stable health endpoint suitable for smoke testing the minimal local runtime, and adding local client authorization boundaries SHALL NOT change the health response contract or make health checks depend on provider, routing, OAuth, quota, credential, local client authorization, GPUI, or app-shell state.
 
@@ -81,30 +68,3 @@ The system SHALL expose a stable health endpoint suitable for smoke testing the 
 #### Scenario: Unknown path does not masquerade as health
 - **WHEN** a client requests a path other than `GET /health`, `POST /v1/chat/completions`, or `/v0/management/*`
 - **THEN** the runtime returns a deterministic non-health response that does not report a healthy smoke-test result, authorization success, management success, or proxy execution success
-
-### Requirement: Runtime reports lifecycle transitions
-The system SHALL report local runtime startup, running, failure, shutdown, and stopped status through typed `oxmux` lifecycle facade states.
-
-#### Scenario: Successful startup reaches running
-- **WHEN** runtime startup begins and the listener binds successfully
-- **THEN** lifecycle status transitions from starting to running and includes the bound endpoint metadata
-
-#### Scenario: Bind failure reaches failed
-- **WHEN** runtime startup cannot bind the configured endpoint because the address is invalid or the port is unavailable
-- **THEN** lifecycle status becomes failed with a structured error that app and library consumers can inspect without parsing logs
-
-#### Scenario: Shutdown reaches stopped
-- **WHEN** a running local health runtime is shut down through the `oxmux` runtime handle
-- **THEN** the listener stops accepting requests, releases the endpoint, and reports stopped lifecycle status
-
-### Requirement: Runtime remains provider and desktop independent
-The system SHALL keep the local runtime independent from real provider transports, OAuth, quota collection side effects, GPUI, tray/background lifecycle, updater, packaging, and platform credential storage while allowing the configured minimal proxy route to invoke core routing and deterministic provider execution traits supplied by `oxmux` tests or future adapters.
-
-#### Scenario: Health runtime runs without external services
-- **WHEN** runtime tests start, query, and shut down the local health runtime
-- **THEN** they complete without real provider accounts, network calls to upstream AI providers, OAuth flows, desktop APIs, GPUI windows, platform credential stores, or `oxidemux` process startup
-
-#### Scenario: Core dependency boundary remains intact
-- **WHEN** maintainers inspect `crates/oxmux/Cargo.toml` after adding the health runtime
-- **THEN** `oxmux` still has no dependency on `oxidemux`, GPUI, gpui-component, tray libraries, updater libraries, packaging tools, provider SDKs, OAuth UI, platform credential storage libraries, or outbound provider HTTP client stacks required by real provider transports
-

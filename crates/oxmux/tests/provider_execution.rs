@@ -501,6 +501,7 @@ fn management_snapshot_can_include_mock_provider_health() -> Result<(), CoreErro
         providers: vec![provider],
         usage: UsageSummary::zero(),
         quota: QuotaSummary::unknown(),
+        local_route_protection: oxmux::LocalRouteProtectionMetadata::disabled(),
         warnings: vec!["mock provider is degraded".to_string()],
         errors: Vec::new(),
     };

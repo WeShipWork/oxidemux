@@ -5,9 +5,9 @@
 //! responses for local runtime tests and bootstrap behavior.
 
 use crate::{
-    CanonicalProtocolRequest, CoreError, ProtocolMetadata, ProtocolPayload, ProtocolPayloadBody,
-    ProviderExecutionRequest, ProviderExecutor, ResponseMode, RoutingAvailabilitySnapshot,
-    RoutingBoundary, RoutingPolicy, RoutingSelectionRequest,
+    CanonicalProtocolRequest, CoreError, LocalClientAuthorizationFailure, ProtocolMetadata,
+    ProtocolPayload, ProtocolPayloadBody, ProviderExecutionRequest, ProviderExecutor, ResponseMode,
+    RoutingAvailabilitySnapshot, RoutingBoundary, RoutingPolicy, RoutingSelectionRequest,
 };
 
 /// OpenAI-compatible chat completions path served by the minimal proxy engine.
@@ -86,10 +86,45 @@ impl MinimalProxyResponse {
         )
     }
 
+    /// Creates a minimal proxy response for local client authorization failures.
+    pub fn local_client_unauthorized(failure: &LocalClientAuthorizationFailure) -> Self {
+        let body = serde_json::json!({
+            "error": {
+                "code": MinimalProxyErrorCode::LocalClientUnauthorized.as_str(),
+                "message": failure.to_string(),
+                "reason": failure.reason.as_str(),
+                "scope": failure.scope.as_str(),
+                "type": "oxmux_proxy_error"
+            }
+        })
+        .to_string();
+
+        Self {
+            status_code: 401,
+            content_type: MINIMAL_PROXY_JSON_CONTENT_TYPE,
+            body,
+        }
+    }
+
+    /// Creates a deterministic protected management boundary response.
+    pub fn management_boundary() -> Self {
+        let body = serde_json::json!({
+            "object": "oxmux.management.boundary",
+            "status": "authorized",
+            "message": "local management boundary reserved"
+        })
+        .to_string();
+
+        Self::success(body)
+    }
+
     /// Maps a core error into a minimal proxy response.
     pub fn from_core_error(error: &CoreError) -> Self {
         match error {
             CoreError::MinimalProxyRequestValidation { .. } => Self::invalid_request(error),
+            CoreError::LocalClientAuthorization { failure } => {
+                Self::local_client_unauthorized(failure)
+            }
             _ => Self::proxy_failure(error),
         }
     }
@@ -139,6 +174,8 @@ pub enum MinimalProxyErrorCode {
     ResponseSerializationFailed,
     /// Local request path is not supported by the minimal runtime.
     UnsupportedPath,
+    /// Local client authorization failed for a protected route.
+    LocalClientUnauthorized,
 }
 
 impl MinimalProxyErrorCode {
@@ -155,12 +192,14 @@ impl MinimalProxyErrorCode {
             Self::UnsupportedResponseMode => "unsupported_response_mode",
             Self::ResponseSerializationFailed => "response_serialization_failed",
             Self::UnsupportedPath => "unsupported_path",
+            Self::LocalClientUnauthorized => "local_client_unauthorized",
         }
     }
 
     fn from_core_error(error: &CoreError) -> Self {
         match error {
             CoreError::MinimalProxyRequestValidation { code, .. } => *code,
+            CoreError::LocalClientAuthorization { .. } => Self::LocalClientUnauthorized,
             CoreError::Routing { .. } => Self::RoutingFailed,
             CoreError::ProviderExecution { .. } => Self::ProviderExecutionFailed,
             CoreError::MinimalProxyUnsupportedResponseMode { .. } => Self::UnsupportedResponseMode,

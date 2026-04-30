@@ -146,8 +146,8 @@ impl ConfigurationSourceMetadata {
 }
 
 use crate::{
-    MinimalProxyErrorCode, ProtocolFamily, ProtocolTranslationDirection, ProviderExecutionFailure,
-    RoutingFailure, StreamingFailure,
+    LocalClientAuthorizationFailure, MinimalProxyErrorCode, ProtocolFamily,
+    ProtocolTranslationDirection, ProviderExecutionFailure, RoutingFailure, StreamingFailure,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -203,6 +203,11 @@ pub enum CoreError {
     LocalRuntimeShutdown {
         /// Human-readable diagnostic message.
         message: String,
+    },
+    /// Local client authorization failed for a protected route.
+    LocalClientAuthorization {
+        /// Structured authorization failure associated with this state.
+        failure: LocalClientAuthorizationFailure,
     },
     /// Provider account summary construction failed.
     ProviderAccountSummary {
@@ -315,6 +320,7 @@ impl fmt::Display for CoreError {
             Self::LocalRuntimeShutdown { message } => {
                 write!(formatter, "local runtime shutdown failed: {message}")
             }
+            Self::LocalClientAuthorization { failure } => write!(formatter, "{failure}"),
             Self::ProviderAccountSummary { message } => {
                 write!(formatter, "provider account summary failed: {message}")
             }
