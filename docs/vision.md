@@ -44,7 +44,6 @@ model without importing the reference implementation shape:
 5. Electron, Tauri, React, SwiftUI, AppKit, Go services, and upstream code
    structure are non-goals. OxideMux copies product lessons, not code or stack.
 
-
 ## Core product intent
 
 - Provider access UX is the star of the application, not an add-on to a generic
@@ -89,7 +88,7 @@ Use this rule when placing new behavior:
 
 - Do not reduce VibeProxy or zero-limit to vague inspiration. Treat them as
   validated product references with an unresolved Linux/cross-platform gap.
-- Do not move subscription-aware routing, request rewrite, model alias,
+- Do not move provider access-aware routing, request rewrite, model alias,
   thinking/reasoning, or protocol compatibility behavior into the desktop shell
   just because the UI exposes it.
 - Do not start with tray, packaging, themes, or updater work if the core cannot
@@ -103,7 +102,6 @@ Use this rule when placing new behavior:
 The older phrase **Subscription UX** is a subset of provider access UX: it covers
 subscription-backed access, while OxideMux also supports regular API-token,
 credit, quota, and spend-tracked providers.
-
 
 - **Provider access UX**: the end-to-end experience of using subscription
   accounts, API-token accounts, provider credits, quota-limited plans, and

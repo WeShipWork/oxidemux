@@ -122,8 +122,8 @@ through `oxmux` contracts.
 Changes to provider access UX, auth/session behavior, credential behavior,
 cost/spend behavior, request rewriting, model aliases, reasoning/thinking
 behavior, routing, provider selection, or crate boundaries require OpenSpec
-coverage before implementation. Core behavior must
-include deterministic tests for normal, quota-pressure, cost/spend-pressure, degraded/unavailable, and
+coverage before implementation. Core behavior must include deterministic tests
+for normal, quota-pressure, cost/spend-pressure, degraded/unavailable, and
 provider-failure cases. App-shell behavior must include tests or documented
 manual checks proving it renders core state and does not duplicate core decision
 logic.
@@ -132,7 +132,9 @@ logic.
 
 `oxmux` may carry credential references, access-method metadata, auth state,
 usage estimates, cost/spend summaries, and redacted diagnostics, but it must
-never persist raw platform secrets or require a platform secret-store crate. `oxidemux` and app-owned adapters own keychain, Secret Service, Windows
+never persist raw platform secrets or require a platform secret-store crate.
+
+`oxidemux` and app-owned adapters own keychain, Secret Service, Windows
 Credential Manager, browser/OAuth presentation, notifications, updater,
 packaging, and OS lifecycle integrations. Telemetry or analytics must be based
 on scrubbed typed events and must not include raw API keys, cookies, bearer
@@ -143,8 +145,8 @@ tokens, or provider session material.
 Every PR that touches `crates/oxmux`, provider access UX, auth/session
 behavior, credential behavior, cost/spend behavior, request rewriting, model
 aliases, reasoning/thinking behavior, routing, provider selection, or crate
-boundaries must link the relevant OpenSpec change
-or explain why the change is documentation-only. Reviews should verify:
+boundaries must link the relevant OpenSpec change or explain why the change is
+documentation-only. Reviews should verify:
 
 - `oxmux` has no dependency on GPUI, gpui-component, tray libraries, updater
   libraries, packaging tools, platform credential storage libraries, provider
