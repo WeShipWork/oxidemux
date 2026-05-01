@@ -10,7 +10,10 @@ pub struct ProviderAuthBoundary;
 
 use crate::CoreError;
 use crate::protocol::{CanonicalProtocolRequest, CanonicalProtocolResponse};
-use crate::streaming::{ResponseMode, StreamingResponse};
+use crate::streaming::{
+    CancellationReason, ResponseMode, StreamEvent, StreamFailure, StreamMetadata, StreamingFailure,
+    StreamingResponse, StreamingRobustnessPolicy,
+};
 use crate::usage::QuotaState;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -309,6 +312,9 @@ impl ProviderExecutor for MockProviderHarness {
                 )),
                 metadata: self.metadata(),
             }),
+            MockProviderOutcome::StreamingAttempts { policy, attempts } => {
+                execute_mock_streaming_attempts(policy, attempts, self.metadata())
+            }
             MockProviderOutcome::Failed(failure) => Err(CoreError::ProviderExecution {
                 provider_id: request.provider_id,
                 account_id: request.account_id,
@@ -439,8 +445,63 @@ pub enum MockProviderOutcome {
     },
     /// Provider execution returns a streaming response.
     Streaming(StreamingResponse),
+    /// Provider execution follows deterministic stream attempts using robustness policy.
+    StreamingAttempts {
+        /// Streaming robustness policy used by this mock execution.
+        policy: StreamingRobustnessPolicy,
+        /// Ordered mock attempts executed until success or pre-stream failure.
+        attempts: Vec<MockStreamingAttempt>,
+    },
     /// Operation or account state failed with a reason.
     Failed(ProviderExecutionFailure),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// One deterministic mock streaming attempt used to test retry and cancellation behavior.
+pub enum MockStreamingAttempt {
+    /// Attempt succeeds with a validated streaming response.
+    Success(StreamingResponse),
+    /// Attempt fails before any stream event is emitted and may be retried.
+    FailBeforeEvent(StreamFailure),
+    /// Attempt times out before any stream event is emitted.
+    TimeoutBeforeEvent {
+        /// Timeout duration in milliseconds.
+        timeout_ms: u64,
+        /// Structured failure associated with the timeout.
+        failure: StreamFailure,
+    },
+    /// Attempt is cancelled before any stream event is emitted.
+    CancelBeforeEvent {
+        /// Cancellation reason observed before stream commit.
+        reason: CancellationReason,
+        /// Structured failure associated with cancellation.
+        failure: StreamFailure,
+    },
+}
+
+impl MockStreamingAttempt {
+    /// Creates a successful mock stream attempt.
+    pub fn success(response: StreamingResponse) -> Self {
+        Self::Success(response)
+    }
+
+    /// Creates a retryable pre-event failed mock stream attempt.
+    pub fn fail_before_event(failure: StreamFailure) -> Self {
+        Self::FailBeforeEvent(failure)
+    }
+
+    /// Creates a deterministic pre-event timeout mock stream attempt.
+    pub fn timeout_before_event(timeout_ms: u64, failure: StreamFailure) -> Self {
+        Self::TimeoutBeforeEvent {
+            timeout_ms,
+            failure,
+        }
+    }
+
+    /// Creates a deterministic pre-event cancellation mock stream attempt.
+    pub fn cancel_before_event(reason: CancellationReason, failure: StreamFailure) -> Self {
+        Self::CancelBeforeEvent { reason, failure }
+    }
 }
 
 impl MockProviderOutcome {
@@ -455,6 +516,14 @@ impl MockProviderOutcome {
     /// Creates a validated streaming response mode.
     pub fn streaming(response: StreamingResponse) -> Self {
         Self::Streaming(response)
+    }
+
+    /// Creates deterministic streaming attempts governed by a robustness policy.
+    pub fn streaming_attempts(
+        policy: StreamingRobustnessPolicy,
+        attempts: Vec<MockStreamingAttempt>,
+    ) -> Self {
+        Self::StreamingAttempts { policy, attempts }
     }
 
     fn supports_streaming(&self) -> bool {
@@ -474,6 +543,7 @@ impl MockProviderOutcome {
                 ..
             } => *supports_streaming || matches!(response_mode, ResponseMode::Streaming(_)),
             Self::Streaming(_) => true,
+            Self::StreamingAttempts { .. } => true,
             Self::Success(_)
             | Self::Degraded { .. }
             | Self::QuotaLimited { .. }
@@ -512,6 +582,24 @@ impl MockProviderOutcome {
                 }
             }
             Self::Streaming(response) => response.validate()?,
+            Self::StreamingAttempts { policy, attempts } => {
+                policy.validate()?;
+                if attempts.is_empty() {
+                    return Err(CoreError::Streaming {
+                        failure: StreamingFailure::PreStreamFailure {
+                            failure: StreamFailure::new(
+                                "empty_stream_attempt_plan",
+                                "mock stream attempt plan must include at least one attempt",
+                            )?,
+                        },
+                    });
+                }
+                for attempt in attempts {
+                    if let MockStreamingAttempt::Success(response) = attempt {
+                        response.validate()?;
+                    }
+                }
+            }
             Self::Success(_)
             | Self::Degraded { .. }
             | Self::QuotaLimited { .. }
@@ -520,6 +608,84 @@ impl MockProviderOutcome {
 
         Ok(())
     }
+}
+
+fn execute_mock_streaming_attempts(
+    policy: &StreamingRobustnessPolicy,
+    attempts: &[MockStreamingAttempt],
+    metadata: ProviderExecutionMetadata,
+) -> Result<ProviderExecutionResult, CoreError> {
+    let max_attempts = usize::from(policy.max_attempts());
+    let mut failed_pre_event_attempts: u8 = 0;
+    let mut last_failure = None;
+
+    for attempt in attempts.iter().take(max_attempts) {
+        match attempt {
+            MockStreamingAttempt::Success(response) => {
+                let response = with_committed_retry_summary(
+                    response.clone(),
+                    failed_pre_event_attempts,
+                    failed_pre_event_attempts.saturating_add(1),
+                )?;
+                return Ok(ProviderExecutionResult {
+                    outcome: ProviderExecutionOutcome::Success(ResponseMode::Streaming(response)),
+                    metadata,
+                });
+            }
+            MockStreamingAttempt::FailBeforeEvent(failure) => {
+                failed_pre_event_attempts = failed_pre_event_attempts.saturating_add(1);
+                last_failure = Some(failure.clone());
+            }
+            MockStreamingAttempt::TimeoutBeforeEvent {
+                timeout_ms,
+                failure,
+            } => {
+                return Err(CoreError::Streaming {
+                    failure: StreamingFailure::PreStreamTimeout {
+                        timeout_ms: *timeout_ms,
+                        failure: failure.clone(),
+                    },
+                });
+            }
+            MockStreamingAttempt::CancelBeforeEvent { reason, failure } => {
+                return Err(CoreError::Streaming {
+                    failure: StreamingFailure::PreStreamCancellation {
+                        reason: reason.clone(),
+                        failure: failure.clone(),
+                    },
+                });
+            }
+        }
+    }
+
+    let failure = last_failure.unwrap_or(StreamFailure::new(
+        "stream_attempt_unavailable",
+        "mock stream attempt plan ended before producing a streaming response",
+    )?);
+    Err(CoreError::Streaming {
+        failure: StreamingFailure::RetryExhausted {
+            total_attempts: failed_pre_event_attempts,
+            failure,
+        },
+    })
+}
+
+fn with_committed_retry_summary(
+    response: StreamingResponse,
+    failed_attempts: u8,
+    total_attempts: u8,
+) -> Result<StreamingResponse, CoreError> {
+    if failed_attempts == 0 {
+        return Ok(response);
+    }
+
+    let mut events = Vec::with_capacity(response.events().len() + 1);
+    events.push(StreamEvent::Metadata(StreamMetadata::retry_summary(
+        failed_attempts,
+        total_attempts,
+    )?));
+    events.extend(response.into_events());
+    StreamingResponse::new(events)
 }
 
 impl ProviderExecutionFailure {

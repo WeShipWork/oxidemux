@@ -3,13 +3,14 @@
 use std::net::{IpAddr, Ipv4Addr};
 
 use oxmux::{
-    AuthMethodCategory, AuthState, CanonicalProtocolRequest, CanonicalProtocolResponse,
-    ConfigurationSnapshot, CoreError, CoreHealthState, DegradedReason, ManagementSnapshot,
-    MockProviderAccount, MockProviderHarness, MockProviderOutcome, ProtocolFamily,
-    ProtocolMetadata, ProtocolPayload, ProtocolPayloadBody, ProtocolResponseStatus,
-    ProviderExecutionFailure, ProviderExecutionOutcome, ProviderExecutionRequest, ProviderExecutor,
-    ProxyLifecycleState, QuotaState, QuotaSummary, ResponseMode, RoutingDefault, StreamContent,
-    StreamEvent, StreamTerminalState, StreamingResponse, UsageSummary, core_identity,
+    AuthMethodCategory, AuthState, CancellationReason, CanonicalProtocolRequest,
+    CanonicalProtocolResponse, ConfigurationSnapshot, CoreError, CoreHealthState, DegradedReason,
+    ManagementSnapshot, MockProviderAccount, MockProviderHarness, MockProviderOutcome,
+    MockStreamingAttempt, ProtocolFamily, ProtocolMetadata, ProtocolPayload, ProtocolPayloadBody,
+    ProtocolResponseStatus, ProviderExecutionFailure, ProviderExecutionOutcome,
+    ProviderExecutionRequest, ProviderExecutor, ProxyLifecycleState, QuotaState, QuotaSummary,
+    ResponseMode, RoutingDefault, StreamContent, StreamEvent, StreamFailure, StreamTerminalState,
+    StreamingFailure, StreamingResponse, StreamingRobustnessPolicy, UsageSummary, core_identity,
 };
 
 #[test]
@@ -221,6 +222,217 @@ fn mock_provider_returns_deterministic_streaming_response_events() -> Result<(),
         streaming_response.events()
     );
     assert!(result.metadata.provider.capabilities[0].supports_streaming);
+
+    Ok(())
+}
+
+#[test]
+fn mock_provider_retries_pre_event_failure_then_commits_success() -> Result<(), CoreError> {
+    let policy = StreamingRobustnessPolicy::new(
+        None,
+        1,
+        None,
+        oxmux::StreamingCancellationPolicy::Disabled,
+    )?;
+    let failed_attempt = StreamFailure::new("bootstrap_failed", "upstream failed before events")?;
+    let successful_response = StreamingResponse::new(vec![
+        StreamEvent::Content(StreamContent::new(
+            ProtocolMetadata::open_ai(),
+            ProtocolPayload::opaque("application/json", br#"{"delta":"ok"}"#.to_vec()),
+        )?),
+        StreamEvent::Terminal(StreamTerminalState::completed()),
+    ])?;
+    let executor = MockProviderHarness::new(
+        "mock-retry-streaming",
+        "Mock Retry Streaming",
+        ProtocolFamily::OpenAi,
+        AuthMethodCategory::ApiKey,
+        MockProviderOutcome::streaming_attempts(
+            policy,
+            vec![
+                MockStreamingAttempt::fail_before_event(failed_attempt),
+                MockStreamingAttempt::success(successful_response),
+            ],
+        ),
+    )?;
+
+    let result = executor.execute(ProviderExecutionRequest::new(
+        "mock-retry-streaming",
+        None,
+        canonical_request(ProtocolMetadata::open_ai())?,
+    )?)?;
+
+    let response = result
+        .outcome
+        .response_mode()
+        .streaming_response()
+        .expect("streaming response");
+    assert!(matches!(
+        response.events().first(),
+        Some(StreamEvent::Metadata(metadata)) if metadata.name() == oxmux::OXMUX_RETRY_SUMMARY_METADATA_KEY
+    ));
+    assert!(response
+        .events()
+        .iter()
+        .all(|event| !matches!(event, StreamEvent::Metadata(metadata) if metadata.value().contains("bootstrap_failed"))));
+    assert!(result.metadata.provider.capabilities[0].supports_streaming);
+
+    Ok(())
+}
+
+#[test]
+fn mock_provider_exhausts_bootstrap_retries_before_first_event() -> Result<(), CoreError> {
+    let policy = StreamingRobustnessPolicy::new(
+        None,
+        1,
+        None,
+        oxmux::StreamingCancellationPolicy::Disabled,
+    )?;
+    let executor = MockProviderHarness::new(
+        "mock-exhausted-streaming",
+        "Mock Exhausted Streaming",
+        ProtocolFamily::OpenAi,
+        AuthMethodCategory::ApiKey,
+        MockProviderOutcome::streaming_attempts(
+            policy,
+            vec![
+                MockStreamingAttempt::fail_before_event(StreamFailure::new(
+                    "bootstrap_failed",
+                    "first attempt failed",
+                )?),
+                MockStreamingAttempt::fail_before_event(StreamFailure::new(
+                    "bootstrap_failed_again",
+                    "second attempt failed",
+                )?),
+            ],
+        ),
+    )?;
+
+    let error = executor.execute(ProviderExecutionRequest::new(
+        "mock-exhausted-streaming",
+        None,
+        canonical_request(ProtocolMetadata::open_ai())?,
+    )?);
+
+    assert!(matches!(
+        error,
+        Err(CoreError::Streaming {
+            failure: StreamingFailure::RetryExhausted {
+                total_attempts: 2,
+                ..
+            }
+        })
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn mock_provider_retry_exhaustion_reports_only_executed_attempts() -> Result<(), CoreError> {
+    let policy = StreamingRobustnessPolicy::new(
+        None,
+        2,
+        None,
+        oxmux::StreamingCancellationPolicy::Disabled,
+    )?;
+    let executor = MockProviderHarness::new(
+        "mock-short-exhausted-streaming",
+        "Mock Short Exhausted Streaming",
+        ProtocolFamily::OpenAi,
+        AuthMethodCategory::ApiKey,
+        MockProviderOutcome::streaming_attempts(
+            policy,
+            vec![MockStreamingAttempt::fail_before_event(StreamFailure::new(
+                "bootstrap_failed",
+                "only configured attempt failed",
+            )?)],
+        ),
+    )?;
+
+    let error = executor.execute(ProviderExecutionRequest::new(
+        "mock-short-exhausted-streaming",
+        None,
+        canonical_request(ProtocolMetadata::open_ai())?,
+    )?);
+
+    assert!(matches!(
+        error,
+        Err(CoreError::Streaming {
+            failure: StreamingFailure::RetryExhausted {
+                total_attempts: 1,
+                ..
+            }
+        })
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn mock_provider_reports_pre_event_timeout_and_cancellation() -> Result<(), CoreError> {
+    let timeout_executor = MockProviderHarness::new(
+        "mock-timeout-streaming",
+        "Mock Timeout Streaming",
+        ProtocolFamily::OpenAi,
+        AuthMethodCategory::ApiKey,
+        MockProviderOutcome::streaming_attempts(
+            StreamingRobustnessPolicy::new(
+                None,
+                0,
+                Some(30_000),
+                oxmux::StreamingCancellationPolicy::Timeout,
+            )?,
+            vec![MockStreamingAttempt::timeout_before_event(
+                30_000,
+                StreamFailure::new("stream_timeout", "timed out before first event")?,
+            )],
+        ),
+    )?;
+    let cancel_executor = MockProviderHarness::new(
+        "mock-cancel-streaming",
+        "Mock Cancel Streaming",
+        ProtocolFamily::OpenAi,
+        AuthMethodCategory::ApiKey,
+        MockProviderOutcome::streaming_attempts(
+            StreamingRobustnessPolicy::new(
+                None,
+                0,
+                None,
+                oxmux::StreamingCancellationPolicy::ClientDisconnect,
+            )?,
+            vec![MockStreamingAttempt::cancel_before_event(
+                CancellationReason::ClientDisconnected,
+                StreamFailure::new("client_disconnected", "client disconnected before events")?,
+            )],
+        ),
+    )?;
+
+    assert!(matches!(
+        timeout_executor.execute(ProviderExecutionRequest::new(
+            "mock-timeout-streaming",
+            None,
+            canonical_request(ProtocolMetadata::open_ai())?,
+        )?),
+        Err(CoreError::Streaming {
+            failure: StreamingFailure::PreStreamTimeout {
+                timeout_ms: 30_000,
+                ..
+            }
+        })
+    ));
+    assert!(matches!(
+        cancel_executor.execute(ProviderExecutionRequest::new(
+            "mock-cancel-streaming",
+            None,
+            canonical_request(ProtocolMetadata::open_ai())?,
+        )?),
+        Err(CoreError::Streaming {
+            failure: StreamingFailure::PreStreamCancellation {
+                reason: CancellationReason::ClientDisconnected,
+                ..
+            }
+        })
+    ));
 
     Ok(())
 }
@@ -493,6 +705,7 @@ fn management_snapshot_can_include_mock_provider_health() -> Result<(), CoreErro
             usage_collection_enabled: false,
             routing_default: RoutingDefault::named("manual"),
             provider_references: vec!["mock-health".to_string()],
+            streaming: StreamingRobustnessPolicy::default(),
         },
         file_configuration: None,
         layered_configuration: None,
@@ -502,6 +715,7 @@ fn management_snapshot_can_include_mock_provider_health() -> Result<(), CoreErro
         usage: UsageSummary::zero(),
         quota: QuotaSummary::unknown(),
         local_route_protection: oxmux::LocalRouteProtectionMetadata::disabled(),
+        latest_streaming_outcome: None,
         warnings: vec!["mock provider is degraded".to_string()],
         errors: Vec::new(),
     };

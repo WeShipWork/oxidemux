@@ -10,7 +10,8 @@ use oxmux::{
     ProtocolPayloadBody, ProtocolResponseStatus, ProviderExecutionFailure,
     ProviderExecutionRequest, ProviderExecutionResult, ProviderExecutor, ResponseMode,
     RoutingAvailabilitySnapshot, RoutingAvailabilityState, RoutingCandidate, RoutingPolicy,
-    RoutingTarget, RoutingTargetAvailability, StreamEvent, StreamTerminalState, StreamingResponse,
+    RoutingTarget, RoutingTargetAvailability, StreamEvent, StreamFailure, StreamTerminalState,
+    StreamingResponse, StreamingRobustnessPolicy,
 };
 
 #[test]
@@ -199,6 +200,50 @@ fn unsupported_response_mode_maps_to_structured_failure() -> Result<(), CoreErro
         response
             .body
             .contains(r#""code":"unsupported_response_mode""#)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn retry_exhaustion_maps_to_stable_proxy_error_code() -> Result<(), CoreError> {
+    let executor = MockProviderHarness::new(
+        "mock-openai",
+        "Mock OpenAI",
+        ProtocolFamily::OpenAi,
+        AuthMethodCategory::ApiKey,
+        MockProviderOutcome::streaming_attempts(
+            StreamingRobustnessPolicy::new(
+                None,
+                0,
+                None,
+                oxmux::StreamingCancellationPolicy::Disabled,
+            )?,
+            vec![oxmux::MockStreamingAttempt::fail_before_event(
+                StreamFailure::new("bootstrap_failed", "bootstrap failed before first event")?,
+            )],
+        ),
+    )?
+    .with_account(MockProviderAccount::new("acct-primary", "Primary account"));
+    let policy = policy_for(RoutingTarget::provider_account(
+        "mock-openai",
+        "acct-primary",
+    ));
+    let availability = availability_for(
+        RoutingTarget::provider_account("mock-openai", "acct-primary"),
+        RoutingAvailabilityState::Available,
+    );
+
+    let response = MinimalProxyEngine::execute_to_response(
+        valid_request("smoke-model")?,
+        MinimalProxyEngineConfig::new(&policy, &availability, &executor),
+    );
+
+    assert_eq!(response.status_code, 502);
+    assert!(
+        response
+            .body
+            .contains(r#""code":"provider_execution_failed""#)
     );
 
     Ok(())

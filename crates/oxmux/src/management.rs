@@ -17,6 +17,7 @@ use crate::configuration::{
     LayeredConfigurationReloadOutcome, LayeredConfigurationState,
 };
 use crate::provider::{DegradedReason, ProviderSummary};
+use crate::streaming::{StreamingRobustnessOutcome, StreamingRobustnessOutcomeKind};
 use crate::usage::{QuotaSummary, UsageSummary};
 use crate::{CoreError, CoreIdentity, LocalRouteProtectionMetadata, core_identity};
 
@@ -47,6 +48,8 @@ pub struct ManagementSnapshot {
     pub quota: QuotaSummary,
     /// Local route protection metadata visible in management state.
     pub local_route_protection: LocalRouteProtectionMetadata,
+    /// Latest stream robustness outcome supplied by provider or proxy execution.
+    pub latest_streaming_outcome: Option<StreamingRobustnessOutcome>,
     /// Non-fatal warnings visible to management consumers.
     pub warnings: Vec<String>,
     /// Structured errors associated with this state.
@@ -69,6 +72,7 @@ impl ManagementSnapshot {
             usage: UsageSummary::zero(),
             quota: QuotaSummary::unknown(),
             local_route_protection: LocalRouteProtectionMetadata::disabled(),
+            latest_streaming_outcome: None,
             warnings: Vec::new(),
             errors: Vec::new(),
         }
@@ -120,6 +124,72 @@ impl ManagementSnapshot {
             }];
         }
         snapshot
+    }
+
+    /// Replaces the latest stream robustness outcome using last-writer-wins semantics.
+    pub fn with_streaming_outcome(mut self, outcome: StreamingRobustnessOutcome) -> Self {
+        self.record_streaming_outcome(outcome);
+        self
+    }
+
+    /// Records the latest stream robustness outcome and updates visible warning/error state.
+    pub fn record_streaming_outcome(&mut self, outcome: StreamingRobustnessOutcome) {
+        self.warnings
+            .retain(|warning| !warning.starts_with("streaming: "));
+        self.errors
+            .retain(|error| !matches!(error, CoreError::Streaming { .. }));
+        self.warnings
+            .push(format!("streaming: {}", outcome.message()));
+        if let Some(error) = outcome.core_error() {
+            self.errors.push(error);
+        }
+        self.latest_streaming_outcome = Some(outcome);
+    }
+}
+
+impl StreamingRobustnessOutcome {
+    fn message(&self) -> String {
+        match &self.kind {
+            StreamingRobustnessOutcomeKind::Timeout { timeout_ms } => {
+                format!("timeout after {timeout_ms} ms")
+            }
+            StreamingRobustnessOutcomeKind::Cancellation { reason } => {
+                format!("cancelled with reason {reason:?}")
+            }
+            StreamingRobustnessOutcomeKind::RetryExhausted {
+                total_attempts,
+                failure,
+            } => format!(
+                "retry exhausted after {total_attempts} attempt(s): {}",
+                failure.message()
+            ),
+            StreamingRobustnessOutcomeKind::ProviderStreamFailure { failure } => {
+                format!("provider stream failure: {}", failure.message())
+            }
+        }
+    }
+
+    fn core_error(&self) -> Option<CoreError> {
+        match &self.kind {
+            StreamingRobustnessOutcomeKind::RetryExhausted {
+                total_attempts,
+                failure,
+            } => Some(CoreError::Streaming {
+                failure: crate::StreamingFailure::RetryExhausted {
+                    total_attempts: *total_attempts,
+                    failure: failure.clone(),
+                },
+            }),
+            StreamingRobustnessOutcomeKind::ProviderStreamFailure { failure } => {
+                Some(CoreError::Streaming {
+                    failure: crate::StreamingFailure::ProviderStreamFailure {
+                        failure: failure.clone(),
+                    },
+                })
+            }
+            StreamingRobustnessOutcomeKind::Timeout { .. }
+            | StreamingRobustnessOutcomeKind::Cancellation { .. } => None,
+        }
     }
 }
 

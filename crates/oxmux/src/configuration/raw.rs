@@ -20,6 +20,8 @@ pub(super) struct RawConfiguration {
     pub(super) observability: RawObservabilityConfiguration,
     #[serde(default)]
     pub(super) lifecycle: RawLifecycleConfiguration,
+    #[serde(default)]
+    pub(super) streaming: RawStreamingConfiguration,
 }
 
 #[derive(Debug, Deserialize)]
@@ -74,6 +76,15 @@ pub(super) struct RawObservabilityConfiguration {
 #[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub(super) struct RawLifecycleConfiguration {
     pub(super) auto_start: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
+pub(super) struct RawStreamingConfiguration {
+    pub(super) keepalive_interval_ms: Option<toml::Value>,
+    pub(super) bootstrap_retry_count: Option<toml::Value>,
+    pub(super) timeout_ms: Option<toml::Value>,
+    pub(super) cancellation: Option<String>,
 }
 
 pub(super) fn parse_raw_configuration(

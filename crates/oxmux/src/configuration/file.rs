@@ -12,7 +12,7 @@ use std::path::Path;
 use super::raw::{
     RawAccountConfiguration, RawConfiguration, RawLifecycleConfiguration,
     RawObservabilityConfiguration, RawProviderConfiguration, RawProxyConfiguration,
-    RawRoutingConfiguration, parse_raw_configuration,
+    RawRoutingConfiguration, RawStreamingConfiguration, parse_raw_configuration,
 };
 use super::validation::validate_raw_configuration;
 use crate::provider::{
@@ -20,6 +20,7 @@ use crate::provider::{
     ProviderSummary,
 };
 use crate::routing::{RoutingPolicy, RoutingTarget};
+use crate::streaming::StreamingRobustnessPolicy;
 use crate::usage::{QuotaState, QuotaSummary, UsageSummary};
 use crate::{
     ConfigurationError, ConfigurationErrorKind, ConfigurationSourceMetadata, CoreError,
@@ -67,6 +68,8 @@ pub struct ConfigurationSnapshot {
     pub routing_default: RoutingDefault,
     /// Provider identifiers referenced by this snapshot.
     pub provider_references: Vec<String>,
+    /// Active streaming robustness policy values visible to management consumers.
+    pub streaming: StreamingRobustnessPolicy,
 }
 
 impl ConfigurationSnapshot {
@@ -80,6 +83,7 @@ impl ConfigurationSnapshot {
             usage_collection_enabled: false,
             routing_default: RoutingDefault::named("manual"),
             provider_references: Vec::new(),
+            streaming: StreamingRobustnessPolicy::default(),
         }
     }
 }
@@ -204,6 +208,8 @@ pub struct ValidatedFileConfiguration {
     pub usage_collection_enabled: bool,
     /// Configured local runtime auto-start intent.
     pub auto_start: AutoStartIntent,
+    /// Validated streaming robustness policy.
+    pub streaming: StreamingRobustnessPolicy,
     /// Non-fatal warnings visible to management consumers.
     pub warnings: Vec<String>,
 }
@@ -267,6 +273,7 @@ impl ValidatedFileConfiguration {
                 .iter()
                 .map(|provider| provider.id.clone())
                 .collect(),
+            streaming: self.streaming.clone(),
         }
     }
 
@@ -683,6 +690,8 @@ pub struct FileBackedManagementConfiguration {
     pub usage_collection_enabled: bool,
     /// Configured local runtime auto-start intent.
     pub auto_start: AutoStartIntent,
+    /// Validated streaming robustness policy.
+    pub streaming: StreamingRobustnessPolicy,
     /// Non-fatal warnings visible to management consumers.
     pub warnings: Vec<String>,
 }
@@ -697,6 +706,7 @@ impl From<&ValidatedFileConfiguration> for FileBackedManagementConfiguration {
             logging: configuration.logging,
             usage_collection_enabled: configuration.usage_collection_enabled,
             auto_start: configuration.auto_start,
+            streaming: configuration.streaming.clone(),
             warnings: configuration.warnings.clone(),
         }
     }
@@ -805,6 +815,7 @@ fn merge_raw_layers(layers: impl IntoIterator<Item = RawConfiguration>) -> RawCo
         routing: RawRoutingConfiguration::default(),
         observability: RawObservabilityConfiguration::default(),
         lifecycle: RawLifecycleConfiguration::default(),
+        streaming: RawStreamingConfiguration::default(),
     };
 
     for layer in layers {
@@ -825,10 +836,26 @@ fn merge_raw_layers(layers: impl IntoIterator<Item = RawConfiguration>) -> RawCo
         if layer.lifecycle.auto_start.is_some() {
             merged.lifecycle.auto_start = layer.lifecycle.auto_start;
         }
+        merge_streaming(&mut merged.streaming, layer.streaming);
     }
 
     sort_provider_identities(&mut merged.providers);
     merged
+}
+
+fn merge_streaming(current: &mut RawStreamingConfiguration, incoming: RawStreamingConfiguration) {
+    if incoming.keepalive_interval_ms.is_some() {
+        current.keepalive_interval_ms = incoming.keepalive_interval_ms;
+    }
+    if incoming.bootstrap_retry_count.is_some() {
+        current.bootstrap_retry_count = incoming.bootstrap_retry_count;
+    }
+    if incoming.timeout_ms.is_some() {
+        current.timeout_ms = incoming.timeout_ms;
+    }
+    if incoming.cancellation.is_some() {
+        current.cancellation = incoming.cancellation;
+    }
 }
 
 fn merge_proxy(
@@ -934,6 +961,22 @@ fn fingerprint_configuration(
     canonical.push_str(&format!(
         "lifecycle.auto-start={:?}\n",
         configuration.auto_start
+    ));
+    canonical.push_str(&format!(
+        "streaming.keepalive-interval-ms={:?}\n",
+        configuration.streaming.keepalive_interval_ms
+    ));
+    canonical.push_str(&format!(
+        "streaming.bootstrap-retry-count={}\n",
+        configuration.streaming.bootstrap_retry_count
+    ));
+    canonical.push_str(&format!(
+        "streaming.timeout-ms={:?}\n",
+        configuration.streaming.timeout_ms
+    ));
+    canonical.push_str(&format!(
+        "streaming.cancellation={:?}\n",
+        configuration.streaming.cancellation
     ));
 
     let mut providers = configuration.providers.clone();
