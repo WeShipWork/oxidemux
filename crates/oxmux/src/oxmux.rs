@@ -21,6 +21,8 @@ pub mod local_proxy_runtime;
 pub mod management;
 /// Minimal local proxy request, response, and smoke-route engine contracts.
 pub mod minimal_proxy;
+/// Static model registry and listing contracts.
+pub mod model_registry;
 /// Protocol metadata, payload, and deferred translation contracts.
 pub mod protocol;
 /// Provider execution, account summary, auth state, and mock harness contracts.
@@ -65,6 +67,12 @@ pub use minimal_proxy::{
     MAX_MINIMAL_PROXY_BODY_BYTES, MINIMAL_CHAT_COMPLETIONS_PATH, MINIMAL_PROXY_JSON_CONTENT_TYPE,
     MinimalProxyEngine, MinimalProxyEngineConfig, MinimalProxyErrorCode, MinimalProxyRequest,
     MinimalProxyResponse,
+};
+pub use model_registry::{
+    ListedModelIdentity, ModelAliasMetadata, ModelCapabilityMetadata, ModelForkMetadata,
+    ModelListingFilter, ModelListingState, ModelRegistry, ModelRegistryCandidate,
+    ModelRegistryEntry, OpenAiModelListProjection, OpenAiModelProjection,
+    ProviderAccountApplicability, ProviderNativeModelTarget, RoutingCandidateMetadata,
 };
 pub use protocol::{
     CanonicalProtocolRequest, CanonicalProtocolResponse, ClaudeProtocolMetadata,
