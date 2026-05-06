@@ -39,3 +39,30 @@ fn core_manifest_excludes_app_and_ui_dependencies() -> std::io::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn model_registry_source_excludes_app_shell_and_runtime_imports() -> std::io::Result<()> {
+    let source_path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/model_registry.rs");
+    let source = fs::read_to_string(source_path)?;
+
+    for forbidden_import in [
+        "use oxidemux",
+        "use gpui",
+        "use reqwest",
+        "use hyper",
+        "use ureq",
+        "use tokio",
+        "use smol",
+        "use async_std",
+        "use futures",
+        "use keyring",
+        "use secret_service",
+    ] {
+        assert!(
+            !source.contains(forbidden_import),
+            "model_registry source must not import {forbidden_import}"
+        );
+    }
+
+    Ok(())
+}
