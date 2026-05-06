@@ -373,6 +373,12 @@ impl ModelRegistryCandidate {
                     .any(|account| account.account_id == *account_id)
             })
         });
+        if let Some(provider) = provider {
+            debug_assert!(
+                provider.capabilities.len() <= 1,
+                "model registry currently projects a single provider capability per provider"
+            );
+        }
         let capabilities = provider
             .and_then(|provider| provider.capabilities.first())
             .map(ModelCapabilityMetadata::from_capability)
@@ -381,7 +387,7 @@ impl ModelRegistryCandidate {
             target.provider_id.clone(),
             target.account_id.clone(),
             provider.is_some(),
-            account.unwrap_or(true),
+            account.unwrap_or_else(|| target.account_id.is_none()),
         );
         let listing_state =
             listing_state_for(provider, account, &capabilities, target, availability);

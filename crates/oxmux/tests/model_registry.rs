@@ -279,6 +279,16 @@ fn filters_distinguish_visible_disabled_and_degraded_entries_without_execution()
         registry.all_entries()[3].candidates[0].listing_state,
         ModelListingState::UnknownProvider { .. }
     ));
+    assert!(
+        !registry.all_entries()[3].candidates[0]
+            .applicability
+            .provider_known
+    );
+    assert!(
+        !registry.all_entries()[3].candidates[0]
+            .applicability
+            .account_known
+    );
 }
 
 #[test]
