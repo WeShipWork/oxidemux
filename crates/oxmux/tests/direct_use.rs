@@ -11,10 +11,10 @@ use oxmux::{
     LocalClientAuthorizationPolicyMetadata, LocalClientCredential, LocalClientRouteScope,
     LocalRouteProtection, LocalRouteProtectionMetadata, ManagementSnapshot, MeteredValue,
     ProtocolFamily, ProtocolMetadata, ProtocolPayload, ProviderCapability, ProviderSummary,
-    ProxyLifecycleState, QuotaState, QuotaSummary, ResponseMode, RoutingDefault, StreamEvent,
-    StreamFailure, StreamMetadata, StreamTerminalState, StreamingResponse,
-    StreamingRobustnessOutcome, StreamingRobustnessOutcomeKind, StreamingRobustnessPolicy,
-    UptimeMetadata, UsageSummary, core_identity,
+    ProxyLifecycleState, QuotaState, QuotaSummary, ReasoningCapability, ResponseMode,
+    RoutingDefault, StreamEvent, StreamFailure, StreamMetadata, StreamTerminalState,
+    StreamingResponse, StreamingRobustnessOutcome, StreamingRobustnessOutcomeKind,
+    StreamingRobustnessPolicy, UptimeMetadata, UsageSummary, core_identity,
 };
 
 #[test]
@@ -126,6 +126,7 @@ fn management_snapshot_can_be_constructed_from_in_memory_values() {
             supports_streaming: true,
             auth_method: AuthMethodCategory::ApiKey,
             routing_eligible: true,
+            reasoning: ReasoningCapability::Unknown,
         }],
         accounts: vec![account],
         degraded_reasons: vec![degraded_reason.clone()],
@@ -353,6 +354,7 @@ fn provider_account_usage_and_quota_summaries_distinguish_placeholder_states() {
             supports_streaming: true,
             auth_method: AuthMethodCategory::OAuth,
             routing_eligible: false,
+            reasoning: ReasoningCapability::Unknown,
         }],
         accounts: vec![AccountSummary {
             account_id: "acct-unknown".to_string(),

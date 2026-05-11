@@ -289,6 +289,7 @@ impl ValidatedFileConfiguration {
                     supports_streaming: true,
                     auth_method: AuthMethodCategory::ExternalReference,
                     routing_eligible: provider.routing_eligible,
+                    reasoning: crate::ReasoningCapability::Unknown,
                 }],
                 accounts: provider
                     .accounts

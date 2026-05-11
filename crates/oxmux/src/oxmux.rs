@@ -27,6 +27,8 @@ pub mod model_registry;
 pub mod protocol;
 /// Provider execution, account summary, auth state, and mock harness contracts.
 pub mod provider;
+/// Provider-neutral reasoning and thinking control contracts.
+pub mod reasoning;
 /// Model routing, target availability, fallback, and selection contracts.
 pub mod routing;
 /// Complete and streaming response state contracts.
@@ -87,6 +89,14 @@ pub use provider::{
     ProtocolFamily, ProviderCapability, ProviderExecutionFailure, ProviderExecutionMetadata,
     ProviderExecutionOutcome, ProviderExecutionRequest, ProviderExecutionResult, ProviderExecutor,
     ProviderSummary,
+};
+pub use reasoning::{
+    MAX_REASONING_TOKEN_BUDGET, MIN_REASONING_TOKEN_BUDGET, ReasoningBudgetRange,
+    ReasoningCapability, ReasoningCapabilityFailure, ReasoningCapabilityLayer,
+    ReasoningCapabilityLayers, ReasoningCapabilitySupport, ReasoningCompatibilityOutcome,
+    ReasoningControl, ReasoningDiagnostics, ReasoningEffort, ReasoningFailureCode,
+    ReasoningHandlingPolicy, ReasoningIntent, ReasoningMetadataInput, ReasoningMode,
+    ReasoningRequest, ReasoningSource, ReasoningTokenBudget, ReasoningValidationFailure,
 };
 pub use routing::{
     FallbackBehavior, ModelAlias, ModelRoute, RoutingAvailabilitySnapshot,

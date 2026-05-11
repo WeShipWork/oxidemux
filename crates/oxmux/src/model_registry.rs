@@ -10,6 +10,7 @@ use crate::provider::{AuthMethodCategory, DegradedReason, ProtocolFamily, Provid
 use crate::routing::{
     RoutingAvailabilitySnapshot, RoutingAvailabilityState, RoutingPolicy, RoutingTarget,
 };
+use crate::{ReasoningCapability, ReasoningIntent};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 /// Deterministic model registry built from static core configuration inputs.
@@ -66,10 +67,10 @@ impl ModelRegistry {
                 let alias_entries = aliases.into_iter().map(move |alias| {
                     ModelRegistryEntry::new(
                         ListedModelIdentity::new(&alias.requested_model, &route.resolved_model),
-                        Some(ModelAliasMetadata::new(
-                            &alias.requested_model,
-                            &alias.resolved_model,
-                        )),
+                        Some(
+                            ModelAliasMetadata::new(&alias.requested_model, &alias.resolved_model)
+                                .with_reasoning(alias.reasoning.clone()),
+                        ),
                         ModelForkMetadata::from_candidate_count(candidates.len()),
                         candidates.clone(),
                     )
@@ -262,6 +263,8 @@ pub struct ModelAliasMetadata {
     pub requested_model_id: String,
     /// Resolved model identifier used by routing policy metadata.
     pub resolved_model_id: String,
+    /// Optional typed alias-derived reasoning metadata.
+    pub reasoning: Option<ReasoningIntent>,
 }
 
 impl ModelAliasMetadata {
@@ -273,7 +276,14 @@ impl ModelAliasMetadata {
         Self {
             requested_model_id: requested_model_id.into(),
             resolved_model_id: resolved_model_id.into(),
+            reasoning: None,
         }
+    }
+
+    /// Attaches typed alias-derived reasoning metadata.
+    pub fn with_reasoning(mut self, reasoning: Option<ReasoningIntent>) -> Self {
+        self.reasoning = reasoning;
+        self
     }
 }
 
@@ -473,27 +483,31 @@ pub struct ModelCapabilityMetadata {
     pub auth_method: Option<AuthMethodCategory>,
     /// Whether routing may select this provider according to static metadata.
     pub routing_eligible: bool,
+    /// Provider-neutral reasoning capability metadata.
+    pub reasoning: ReasoningCapability,
 }
 
 impl ModelCapabilityMetadata {
     /// Creates capability metadata from explicit values.
-    pub const fn new(
+    pub fn new(
         protocol_family: Option<ProtocolFamily>,
         supports_streaming: bool,
         auth_method: Option<AuthMethodCategory>,
         routing_eligible: bool,
+        reasoning: ReasoningCapability,
     ) -> Self {
         Self {
             protocol_family,
             supports_streaming,
             auth_method,
             routing_eligible,
+            reasoning,
         }
     }
 
     /// Creates unknown capability metadata for missing provider state.
-    pub const fn unknown() -> Self {
-        Self::new(None, false, None, false)
+    pub fn unknown() -> Self {
+        Self::new(None, false, None, false, ReasoningCapability::Unknown)
     }
 
     fn from_capability(capability: &crate::provider::ProviderCapability) -> Self {
@@ -502,6 +516,7 @@ impl ModelCapabilityMetadata {
             capability.supports_streaming,
             Some(capability.auth_method),
             capability.routing_eligible,
+            capability.reasoning.clone(),
         )
     }
 }
