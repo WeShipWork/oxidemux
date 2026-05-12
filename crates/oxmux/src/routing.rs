@@ -295,6 +295,12 @@ impl ModelAlias {
         validate_required_text("model_aliases.resolved_model", &self.resolved_model)?;
         if let Some(reasoning) = &self.reasoning {
             reasoning.validate()?;
+            if reasoning.source.is_explicit() {
+                return Err(invalid_policy(
+                    "model_aliases.reasoning.source",
+                    "model alias reasoning metadata cannot use explicit source".to_string(),
+                ));
+            }
         }
         Ok(())
     }

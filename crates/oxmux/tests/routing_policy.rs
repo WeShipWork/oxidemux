@@ -3,10 +3,10 @@
 use oxmux::{
     AuthMethodCategory, CanonicalProtocolResponse, CoreError, FallbackBehavior,
     MockProviderAccount, MockProviderHarness, MockProviderOutcome, ModelAlias, ModelRoute,
-    ProtocolFamily, ProtocolMetadata, ProtocolPayload, ProtocolResponseStatus,
-    RoutingAvailabilitySnapshot, RoutingAvailabilityState, RoutingBoundary, RoutingCandidate,
-    RoutingDecisionMode, RoutingFailure, RoutingPolicy, RoutingSelectionRequest, RoutingSkipReason,
-    RoutingTarget, RoutingTargetAvailability,
+    ProtocolFamily, ProtocolMetadata, ProtocolPayload, ProtocolResponseStatus, ReasoningControl,
+    ReasoningIntent, ReasoningMode, RoutingAvailabilitySnapshot, RoutingAvailabilityState,
+    RoutingBoundary, RoutingCandidate, RoutingDecisionMode, RoutingFailure, RoutingPolicy,
+    RoutingSelectionRequest, RoutingSkipReason, RoutingTarget, RoutingTargetAvailability,
 };
 
 #[test]
@@ -408,6 +408,32 @@ fn invalid_policy_returns_structured_core_error() {
         Err(CoreError::Routing {
             failure: RoutingFailure::InvalidPolicy {
                 field: "routes.resolved_model",
+                ..
+            }
+        })
+    ));
+}
+
+#[test]
+fn explicit_reasoning_source_is_invalid_for_model_alias() {
+    let target = RoutingTarget::provider_account("openai", "primary");
+    let explicit_reasoning =
+        ReasoningIntent::explicit(ReasoningMode::Reasoning, ReasoningControl::None)
+            .expect("explicit reasoning intent");
+    let policy = RoutingPolicy::new(vec![ModelRoute::new(
+        "gpt-4o",
+        vec![RoutingCandidate::new(target.clone())],
+    )])
+    .with_model_alias(ModelAlias::new("smart", "gpt-4o").with_reasoning(explicit_reasoning));
+    let availability = available_snapshot(vec![target]);
+
+    let error = policy.select(&RoutingSelectionRequest::new("smart"), &availability);
+
+    assert!(matches!(
+        error,
+        Err(CoreError::Routing {
+            failure: RoutingFailure::InvalidPolicy {
+                field: "model_aliases.reasoning.source",
                 ..
             }
         })
