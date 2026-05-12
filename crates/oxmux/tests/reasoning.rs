@@ -79,6 +79,19 @@ fn reasoning_validation_covers_absent_effort_budget_and_conflicts() {
         Err(CoreError::ReasoningValidation { failure })
             if failure.code == ReasoningFailureCode::InvalidModeControlCombination
     ));
+
+    let explicit_permissive = ReasoningIntent::new(
+        ReasoningSource::Explicit,
+        ReasoningMode::Reasoning,
+        ReasoningControl::None,
+        ReasoningHandlingPolicy::Permissive,
+        ReasoningDiagnostics::default(),
+    );
+    assert!(matches!(
+        explicit_permissive,
+        Err(CoreError::ReasoningValidation { failure })
+            if failure.code == ReasoningFailureCode::InvalidHandlingPolicy && failure.field == "handling"
+    ));
 }
 
 #[test]

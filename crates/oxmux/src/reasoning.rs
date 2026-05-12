@@ -100,6 +100,14 @@ impl ReasoningIntent {
     /// Validates this intent and returns structured reasoning errors.
     pub fn validate(&self) -> Result<(), CoreError> {
         self.source.validate()?;
+        if self.source.is_explicit() && matches!(self.handling, ReasoningHandlingPolicy::Permissive)
+        {
+            return Err(reasoning_validation_error(
+                ReasoningFailureCode::InvalidHandlingPolicy,
+                "handling",
+                "explicit reasoning intent must use strict handling",
+            ));
+        }
         self.mode.validate(&self.control)?;
         self.control.validate()?;
         self.diagnostics.validate()?;
@@ -620,6 +628,8 @@ pub enum ReasoningFailureCode {
     MutuallyExclusiveControls,
     /// Mode and control combination is invalid.
     InvalidModeControlCombination,
+    /// Handling policy is invalid for the reasoning source.
+    InvalidHandlingPolicy,
     /// Required reasoning field is blank.
     BlankField,
     /// Requested capability is unsupported.
