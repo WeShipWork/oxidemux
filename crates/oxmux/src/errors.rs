@@ -156,7 +156,7 @@ impl ConfigurationSourceMetadata {
 use crate::{
     LocalClientAuthorizationFailure, MinimalProxyErrorCode, ProtocolFamily,
     ProtocolTranslationDirection, ProviderExecutionFailure, ReasoningCapabilityFailure,
-    ReasoningValidationFailure, RoutingFailure, StreamingFailure,
+    ReasoningCapabilityLayer, ReasoningValidationFailure, RoutingFailure, StreamingFailure,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -405,6 +405,19 @@ impl fmt::Display for CoreError {
                     "minimal proxy response serialization failed: {message}"
                 )
             }
+        }
+    }
+}
+
+impl CoreError {
+    pub(crate) fn with_reasoning_layer(self, layer: ReasoningCapabilityLayer) -> Self {
+        match self {
+            Self::ReasoningUnsupportedCapability { failure } => {
+                Self::ReasoningUnsupportedCapability {
+                    failure: Box::new(failure.with_layer(layer)),
+                }
+            }
+            other => other,
         }
     }
 }

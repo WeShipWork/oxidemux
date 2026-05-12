@@ -187,6 +187,32 @@ fn reasoning_capability_outcomes_cover_supported_ignored_degraded_unknown_and_pr
     let (layer, capability) = layers.effective();
     assert_eq!(layer, ReasoningCapabilityLayer::Model);
     assert!(matches!(capability, ReasoningCapability::Supported(_)));
+
+    let layered_outcome = layers
+        .evaluate(&explicit)
+        .expect("model layer supports intent");
+    assert!(matches!(
+        layered_outcome,
+        ReasoningCompatibilityOutcome::Supported {
+            layer: ReasoningCapabilityLayer::Model,
+            ..
+        }
+    ));
+
+    let unsupported_provider = ReasoningCapabilityLayers {
+        provider: Some(ReasoningCapability::Unsupported {
+            reason: "provider".to_string(),
+        }),
+        account: None,
+        model: None,
+    }
+    .evaluate(&explicit);
+    assert!(matches!(
+        unsupported_provider,
+        Err(CoreError::ReasoningUnsupportedCapability { failure })
+            if failure.code == ReasoningFailureCode::UnsupportedCapability
+                && failure.layer == ReasoningCapabilityLayer::Provider
+    ));
 }
 
 #[test]

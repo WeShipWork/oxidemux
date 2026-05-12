@@ -225,7 +225,7 @@ pub enum ReasoningEffort {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 /// Provider-neutral token budget validated to the core range.
 pub struct ReasoningTokenBudget {
-    /// Token budget value in the inclusive `1..=200000` range.
+    /// Token budget value in the inclusive core range.
     pub tokens: u32,
 }
 
@@ -236,7 +236,10 @@ impl ReasoningTokenBudget {
             return Err(reasoning_validation_error(
                 ReasoningFailureCode::BudgetOutOfRange,
                 "budget",
-                "reasoning token budget must be in the 1..=200000 range",
+                format!(
+                    "reasoning token budget must be in the {}..={} range",
+                    MIN_REASONING_TOKEN_BUDGET, MAX_REASONING_TOKEN_BUDGET
+                ),
             ));
         }
         Ok(Self { tokens })
@@ -357,6 +360,7 @@ impl ReasoningCapability {
                 Ok(ReasoningCompatibilityOutcome::Supported {
                     intent: intent.clone(),
                     capability: self.clone(),
+                    layer: ReasoningCapabilityLayer::Unknown,
                 })
             }
             Self::Supported(_) => unsupported_or_ignored(
@@ -368,6 +372,7 @@ impl ReasoningCapability {
                 Ok(ReasoningCompatibilityOutcome::Degraded {
                     intent: intent.clone(),
                     capability: self.clone(),
+                    layer: ReasoningCapabilityLayer::Unknown,
                     reasons: reasons.clone(),
                 })
             }
@@ -479,6 +484,7 @@ impl ReasoningCapabilityLayers {
         capability
             .evaluate(intent)
             .map(|outcome| outcome.with_layer(layer))
+            .map_err(|error| error.with_reasoning_layer(layer))
     }
 }
 
@@ -506,6 +512,8 @@ pub enum ReasoningCompatibilityOutcome {
         intent: ReasoningIntent,
         /// Capability metadata used for evaluation.
         capability: ReasoningCapability,
+        /// Layer that supplied the capability metadata.
+        layer: ReasoningCapabilityLayer,
     },
     /// Intent was ignored under permissive handling.
     Ignored {
@@ -513,6 +521,8 @@ pub enum ReasoningCompatibilityOutcome {
         intent: ReasoningIntent,
         /// Capability metadata used for evaluation.
         capability: ReasoningCapability,
+        /// Layer that supplied the capability metadata.
+        layer: ReasoningCapabilityLayer,
         /// Reason the intent was ignored.
         reason: String,
     },
@@ -522,30 +532,49 @@ pub enum ReasoningCompatibilityOutcome {
         intent: ReasoningIntent,
         /// Capability metadata used for evaluation.
         capability: ReasoningCapability,
+        /// Layer that supplied the capability metadata.
+        layer: ReasoningCapabilityLayer,
         /// Degradation reasons.
         reasons: Vec<String>,
-    },
-    /// Unsupported outcome data, usually returned as a `CoreError` for strict handling.
-    Unsupported {
-        /// Normalized intent.
-        intent: ReasoningIntent,
-        /// Capability metadata used for evaluation.
-        capability: ReasoningCapability,
-        /// Reason the intent is unsupported.
-        reason: String,
-    },
-    /// Unknown outcome data, usually returned as a `CoreError` for strict handling.
-    Unknown {
-        /// Normalized intent.
-        intent: ReasoningIntent,
-        /// Capability metadata used for evaluation.
-        capability: ReasoningCapability,
     },
 }
 
 impl ReasoningCompatibilityOutcome {
-    fn with_layer(self, _layer: ReasoningCapabilityLayer) -> Self {
-        self
+    fn with_layer(self, layer: ReasoningCapabilityLayer) -> Self {
+        match self {
+            Self::Absent => Self::Absent,
+            Self::Supported {
+                intent,
+                capability,
+                layer: _,
+            } => Self::Supported {
+                intent,
+                capability,
+                layer,
+            },
+            Self::Ignored {
+                intent,
+                capability,
+                layer: _,
+                reason,
+            } => Self::Ignored {
+                intent,
+                capability,
+                layer,
+                reason,
+            },
+            Self::Degraded {
+                intent,
+                capability,
+                layer: _,
+                reasons,
+            } => Self::Degraded {
+                intent,
+                capability,
+                layer,
+                reasons,
+            },
+        }
     }
 }
 
@@ -569,8 +598,17 @@ pub struct ReasoningCapabilityFailure {
     pub intent: ReasoningIntent,
     /// Capability metadata used for evaluation.
     pub capability: ReasoningCapability,
+    /// Layer that supplied the capability metadata.
+    pub layer: ReasoningCapabilityLayer,
     /// Human-readable diagnostic message.
     pub message: String,
+}
+
+impl ReasoningCapabilityFailure {
+    pub(crate) fn with_layer(mut self, layer: ReasoningCapabilityLayer) -> Self {
+        self.layer = layer;
+        self
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -601,6 +639,7 @@ fn unsupported_or_ignored(
         Ok(ReasoningCompatibilityOutcome::Ignored {
             intent: intent.clone(),
             capability,
+            layer: ReasoningCapabilityLayer::Unknown,
             reason: reason.to_string(),
         })
     } else {
@@ -609,6 +648,7 @@ fn unsupported_or_ignored(
                 code: ReasoningFailureCode::UnsupportedCapability,
                 intent: intent.clone(),
                 capability,
+                layer: ReasoningCapabilityLayer::Unknown,
                 message: reason.to_string(),
             }),
         })
@@ -625,6 +665,7 @@ fn unknown_or_ignored(
         Ok(ReasoningCompatibilityOutcome::Ignored {
             intent: intent.clone(),
             capability,
+            layer: ReasoningCapabilityLayer::Unknown,
             reason: "target reasoning capability is unknown".to_string(),
         })
     } else {
@@ -633,6 +674,7 @@ fn unknown_or_ignored(
                 code: ReasoningFailureCode::UnknownCapability,
                 intent: intent.clone(),
                 capability,
+                layer: ReasoningCapabilityLayer::Unknown,
                 message: "target reasoning capability is unknown".to_string(),
             }),
         })
