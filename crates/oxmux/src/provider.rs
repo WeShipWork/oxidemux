@@ -46,6 +46,23 @@ impl ProviderExecutionRequest {
         Ok(request)
     }
 
+    /// Creates a provider execution request with target-evaluated reasoning compatibility metadata.
+    pub fn new_with_reasoning_outcome(
+        provider_id: impl Into<String>,
+        account_id: Option<String>,
+        request: CanonicalProtocolRequest,
+        reasoning_outcome: ReasoningCompatibilityOutcome,
+    ) -> Result<Self, CoreError> {
+        let request = Self {
+            provider_id: provider_id.into(),
+            account_id,
+            request,
+            reasoning_outcome,
+        };
+        request.validate()?;
+        Ok(request)
+    }
+
     /// Attaches target-evaluated reasoning compatibility metadata.
     pub fn with_reasoning_outcome(
         mut self,
@@ -65,7 +82,23 @@ impl ProviderExecutionRequest {
     pub fn validate(&self) -> Result<(), CoreError> {
         validate_required_text("provider_id", &self.provider_id)?;
         validate_optional_text("account_id", self.account_id.as_deref())?;
-        self.request.validate()
+        self.request.validate()?;
+        if self.request.reasoning.as_intent().is_some()
+            && matches!(
+                self.reasoning_outcome,
+                ReasoningCompatibilityOutcome::Absent
+            )
+        {
+            return Err(CoreError::ProviderExecution {
+                provider_id: self.provider_id.clone(),
+                account_id: self.account_id.clone(),
+                failure: ProviderExecutionFailure::InvalidSelection {
+                    message: "reasoning_outcome must not be absent when request reasoning intent is present"
+                        .to_string(),
+                },
+            });
+        }
+        Ok(())
     }
 }
 

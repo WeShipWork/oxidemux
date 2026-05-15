@@ -109,7 +109,6 @@ impl ReasoningIntent {
             ));
         }
         self.mode.validate(&self.control)?;
-        self.control.validate()?;
         self.diagnostics.validate()?;
         Ok(())
     }
@@ -263,14 +262,6 @@ pub enum ReasoningControl {
     Effort(ReasoningEffort),
     /// Provider-neutral token budget.
     Budget(ReasoningTokenBudget),
-}
-
-impl ReasoningControl {
-    fn validate(&self) -> Result<(), CoreError> {
-        match self {
-            Self::None | Self::Effort(_) | Self::Budget(_) => Ok(()),
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

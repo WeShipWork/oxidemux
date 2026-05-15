@@ -269,13 +269,24 @@ fn protocol_and_provider_boundaries_preserve_reasoning_without_payload_parsing()
         MockProviderOutcome::Success(response),
     )
     .expect("mock provider");
+    assert!(matches!(
+        ProviderExecutionRequest::new("openai", None, request.clone()),
+        Err(CoreError::ProviderExecution {
+            failure: ProviderExecutionFailure::InvalidSelection { message },
+            ..
+        }) if message.contains("reasoning_outcome must not be absent")
+    ));
+
     let outcome = ReasoningCapability::supported()
         .evaluate(&intent)
         .expect("supported");
-    let execution_request = ProviderExecutionRequest::new("openai", None, request)
-        .expect("execution request")
-        .with_reasoning_outcome(outcome.clone())
-        .expect("attach outcome");
+    let execution_request = ProviderExecutionRequest::new_with_reasoning_outcome(
+        "openai",
+        None,
+        request,
+        outcome.clone(),
+    )
+    .expect("execution request");
     let result = harness.execute(execution_request).expect("mock execute");
     assert_eq!(result.metadata.reasoning_outcome, outcome);
 }
