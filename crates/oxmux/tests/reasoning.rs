@@ -290,3 +290,39 @@ fn protocol_and_provider_boundaries_preserve_reasoning_without_payload_parsing()
     let result = harness.execute(execution_request).expect("mock execute");
     assert_eq!(result.metadata.reasoning_outcome, outcome);
 }
+
+#[test]
+fn provider_execution_rejects_reasoning_outcome_without_reasoning_intent() {
+    let request = CanonicalProtocolRequest::new(
+        ProtocolMetadata::open_ai(),
+        "gpt",
+        ProtocolPayload::opaque("application/json", br#"{}"#.to_vec()),
+    )
+    .expect("canonical request");
+    let outcome = ReasoningCapability::supported()
+        .evaluate(&explicit_effort())
+        .expect("supported");
+
+    assert!(matches!(
+        ProviderExecutionRequest::new_with_reasoning_outcome(
+            "openai",
+            None,
+            request.clone(),
+            outcome.clone(),
+        ),
+        Err(CoreError::ProviderExecution {
+            failure: ProviderExecutionFailure::InvalidSelection { message },
+            ..
+        }) if message.contains("reasoning_outcome must be absent")
+    ));
+
+    assert!(matches!(
+        ProviderExecutionRequest::new("openai", None, request)
+            .expect("execution request")
+            .with_reasoning_outcome(outcome),
+        Err(CoreError::ProviderExecution {
+            failure: ProviderExecutionFailure::InvalidSelection { message },
+            ..
+        }) if message.contains("reasoning_outcome must be absent")
+    ));
+}

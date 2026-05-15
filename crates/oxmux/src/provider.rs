@@ -83,18 +83,22 @@ impl ProviderExecutionRequest {
         validate_required_text("provider_id", &self.provider_id)?;
         validate_optional_text("account_id", self.account_id.as_deref())?;
         self.request.validate()?;
-        if self.request.reasoning.as_intent().is_some()
-            && matches!(
-                self.reasoning_outcome,
-                ReasoningCompatibilityOutcome::Absent
-            )
-        {
+        let has_reasoning_intent = self.request.reasoning.as_intent().is_some();
+        let has_reasoning_outcome = !matches!(
+            self.reasoning_outcome,
+            ReasoningCompatibilityOutcome::Absent
+        );
+        if has_reasoning_intent != has_reasoning_outcome {
+            let message = if has_reasoning_intent {
+                "reasoning_outcome must not be absent when request reasoning intent is present"
+            } else {
+                "reasoning_outcome must be absent when request carries no reasoning intent"
+            };
             return Err(CoreError::ProviderExecution {
                 provider_id: self.provider_id.clone(),
                 account_id: self.account_id.clone(),
                 failure: ProviderExecutionFailure::InvalidSelection {
-                    message: "reasoning_outcome must not be absent when request reasoning intent is present"
-                        .to_string(),
+                    message: message.to_string(),
                 },
             });
         }
