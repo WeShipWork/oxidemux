@@ -155,7 +155,8 @@ impl ConfigurationSourceMetadata {
 
 use crate::{
     LocalClientAuthorizationFailure, MinimalProxyErrorCode, ProtocolFamily,
-    ProtocolTranslationDirection, ProviderExecutionFailure, RoutingFailure, StreamingFailure,
+    ProtocolTranslationDirection, ProviderExecutionFailure, ReasoningCapabilityFailure,
+    ReasoningCapabilityLayer, ReasoningValidationFailure, RoutingFailure, StreamingFailure,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -253,6 +254,16 @@ pub enum CoreError {
         target_family: ProtocolFamily,
         /// Human-readable diagnostic message.
         message: String,
+    },
+    /// Reasoning controls failed deterministic validation.
+    ReasoningValidation {
+        /// Structured validation failure associated with this state.
+        failure: Box<ReasoningValidationFailure>,
+    },
+    /// Selected target cannot honor requested reasoning controls.
+    ReasoningUnsupportedCapability {
+        /// Structured capability failure associated with this state.
+        failure: Box<ReasoningCapabilityFailure>,
     },
     /// Routing failed with a matchable routing failure.
     Routing {
@@ -358,6 +369,18 @@ impl fmt::Display for CoreError {
                 formatter,
                 "protocol {direction:?} translation from {source_family:?} to {target_family:?} is deferred: {message}"
             ),
+            Self::ReasoningValidation { failure } => write!(
+                formatter,
+                "reasoning field {} is invalid: {}",
+                failure.field, failure.message
+            ),
+            Self::ReasoningUnsupportedCapability { failure } => {
+                write!(
+                    formatter,
+                    "reasoning capability is unsupported: {}",
+                    failure.message
+                )
+            }
             Self::Routing { failure } => {
                 write!(formatter, "routing failed: {}", failure.message())
             }
@@ -382,6 +405,19 @@ impl fmt::Display for CoreError {
                     "minimal proxy response serialization failed: {message}"
                 )
             }
+        }
+    }
+}
+
+impl CoreError {
+    pub(crate) fn with_reasoning_layer(self, layer: ReasoningCapabilityLayer) -> Self {
+        match self {
+            Self::ReasoningUnsupportedCapability { failure } => {
+                Self::ReasoningUnsupportedCapability {
+                    failure: Box::new(failure.with_layer(layer)),
+                }
+            }
+            other => other,
         }
     }
 }

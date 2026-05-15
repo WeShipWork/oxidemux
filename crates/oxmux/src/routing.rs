@@ -4,7 +4,7 @@
 //! records skipped candidates, and reports fallback or degraded-selection reasons
 //! for consumers of the headless core.
 
-use crate::CoreError;
+use crate::{CoreError, ReasoningIntent};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 /// Facade for selecting routing targets from policy and availability state.
@@ -270,6 +270,8 @@ pub struct ModelAlias {
     pub requested_model: String,
     /// Model name after applying configured aliases.
     pub resolved_model: String,
+    /// Optional typed alias-derived reasoning metadata.
+    pub reasoning: Option<ReasoningIntent>,
 }
 
 impl ModelAlias {
@@ -278,12 +280,29 @@ impl ModelAlias {
         Self {
             requested_model: requested_model.into(),
             resolved_model: resolved_model.into(),
+            reasoning: None,
         }
+    }
+
+    /// Attaches typed alias-derived reasoning metadata.
+    pub fn with_reasoning(mut self, reasoning: ReasoningIntent) -> Self {
+        self.reasoning = Some(reasoning);
+        self
     }
 
     fn validate(&self) -> Result<(), CoreError> {
         validate_required_text("model_aliases.requested_model", &self.requested_model)?;
-        validate_required_text("model_aliases.resolved_model", &self.resolved_model)
+        validate_required_text("model_aliases.resolved_model", &self.resolved_model)?;
+        if let Some(reasoning) = &self.reasoning {
+            reasoning.validate()?;
+            if reasoning.source.is_explicit() {
+                return Err(invalid_policy(
+                    "model_aliases.reasoning.source",
+                    "model alias reasoning metadata cannot use explicit source".to_string(),
+                ));
+            }
+        }
+        Ok(())
     }
 }
 

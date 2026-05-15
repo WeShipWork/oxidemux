@@ -3,9 +3,9 @@
 use oxmux::{
     AccountSummary, AuthMethodCategory, AuthState, ConfigurationBoundary, DegradedReason,
     FallbackBehavior, ModelAlias, ModelListingFilter, ModelListingState, ModelRegistry, ModelRoute,
-    ProtocolFamily, ProviderCapability, ProviderSummary, QuotaState, RoutingAvailabilitySnapshot,
-    RoutingAvailabilityState, RoutingCandidate, RoutingPolicy, RoutingTarget,
-    RoutingTargetAvailability,
+    ProtocolFamily, ProviderCapability, ProviderSummary, QuotaState, ReasoningCapability,
+    RoutingAvailabilitySnapshot, RoutingAvailabilityState, RoutingCandidate, RoutingPolicy,
+    RoutingTarget, RoutingTargetAvailability,
 };
 
 const VALID_TOML: &str = include_str!("fixtures/file_configuration/valid.toml");
@@ -421,6 +421,7 @@ fn provider_summary(
             supports_streaming,
             auth_method: AuthMethodCategory::ApiKey,
             routing_eligible,
+            reasoning: ReasoningCapability::Unknown,
         }],
         accounts: vec![account_summary(account_id)],
         degraded_reasons: Vec::new(),
@@ -441,6 +442,7 @@ fn provider_summary_without_account(
             supports_streaming,
             auth_method: AuthMethodCategory::ApiKey,
             routing_eligible,
+            reasoning: ReasoningCapability::Unknown,
         }],
         accounts: Vec::new(),
         degraded_reasons: Vec::new(),

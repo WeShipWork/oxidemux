@@ -44,7 +44,7 @@ The system SHALL provide an `oxmux` Rust library crate that is usable without GP
 - **THEN** it can construct the public core facade and start, query, and shut down the minimal local health runtime without launching the `oxidemux` binary, opening a window, starting IPC, or contacting an external provider
 
 ### Requirement: Minimal public facade for future core domains
-The `oxmux` crate SHALL expose a small public facade that establishes ownership of proxy lifecycle, local health runtime, local client authorization, provider/auth, provider execution, routing, protocol translation, configuration, streaming, management/status, usage/quota, domain error primitives, and a minimal concrete proxy request smoke path without implementing full provider SDK integration, outbound provider calls, credential storage, full proxy request handling, remote management panels, or real streaming transport adapters in this change.
+The `oxmux` crate SHALL expose a small public facade that establishes ownership of proxy lifecycle, local health runtime, local client authorization, provider/auth, provider execution, model registry/listing, routing, protocol translation, configuration, streaming, management/status, usage/quota, domain error primitives, and a minimal concrete proxy request smoke path without implementing full provider SDK integration, outbound provider calls, credential storage, full proxy request handling, remote management panels, provider scraping, remote model updater jobs, concrete `/v1/models` HTTP route behavior, or real streaming transport adapters in this change.
 
 #### Scenario: Provider auth ownership is visible but not implemented
 - **WHEN** maintainers inspect the `oxmux` public API or documentation
@@ -58,6 +58,10 @@ The `oxmux` crate SHALL expose a small public facade that establishes ownership 
 - **WHEN** maintainers inspect the `oxmux` public API or documentation after adding provider execution primitives
 - **THEN** provider execution is represented by trait, request, result, mock harness, and structured outcome primitives that can be used in deterministic tests without requiring real provider SDKs, HTTP clients, OAuth, platform credential storage, GPUI, or app-shell state
 
+#### Scenario: Model registry ownership exposes typed listing primitives
+- **WHEN** maintainers inspect the `oxmux` public API or documentation after adding model registry/listing primitives
+- **THEN** configured models, provider-native model targets, aliases, forks, provider/account applicability, routing eligibility, streaming support, disabled state, degraded state, and future `/v1/models` serialization semantics are represented by typed public primitives without requiring provider SDKs, outbound provider calls, provider scraping, remote model updater jobs, GPUI, or app-shell state
+
 #### Scenario: Routing ownership exposes typed policy primitives
 - **WHEN** maintainers inspect the `oxmux` public API or documentation after adding routing policy primitives
 - **THEN** model aliases, account targeting, priority, fallback, exhausted states, degraded states, selection outcomes, skipped candidate metadata, and routing failure details are represented by typed public primitives and exercised by the minimal smoke route without requiring full proxy routing behavior, provider SDKs, outbound provider calls, GPUI, or app-shell state
@@ -67,13 +71,12 @@ The `oxmux` crate SHALL expose a small public facade that establishes ownership 
 - **THEN** OpenAI, Gemini, Claude, Codex, and provider-specific protocol translation are represented by typed request/response boundaries, typed protocol metadata, and deferred translation results while the minimal smoke route may construct an OpenAI canonical request without requiring full request translators, response translators, or outbound provider calls in this phase
 
 #### Scenario: Streaming ownership exposes typed response primitives
-- **WHEN** maintainers inspect the `oxmux` public API or documentation after adding streaming response primitives
-- **THEN** response mode, complete responses, ordered stream events, in-sequence terminal events, stream completion, stream cancellation, stream errors, streaming failure details, and deterministic mock stream outcomes are represented by typed public primitives without requiring network transports, provider stream adapters, provider SDKs, outbound provider calls, GPUI, or app-shell state
+- **WHEN** maintainers inspect the `oxmux` public API or documentation after adding streaming response primitives and robustness controls
+- **THEN** complete responses, streaming response events, streaming capability metadata, keepalive metadata, timeout metadata, retry-summary metadata, retry-exhaustion metadata, cancellation, terminal stream errors, and stream robustness policy are represented by typed public primitives without requiring real upstream streaming endpoints, WebSocket relay support, provider SDKs, outbound provider calls, GPUI, or app-shell state
 
 #### Scenario: Management ownership includes local health runtime status
-- **WHEN** maintainers inspect the `oxmux` public API or documentation
-- **THEN** proxy lifecycle state, local health runtime status, provider listing, account health, usage, quota, degraded service status, and protected management/status/control route boundaries are identified as core concerns while full remote management panels remain deferred
-
+- **WHEN** maintainers inspect the `oxmux` public API or documentation after adding local health runtime behavior
+- **THEN** lifecycle, endpoint binding, health state, configuration snapshots, provider/account summaries, usage/quota summaries, local route protection metadata, latest streaming robustness outcome, warnings, and structured errors are represented as core management concerns without requiring GPUI, tray, updater, packaging, platform credential storage, or app-shell state
 ### Requirement: Core owns subscription proxy semantics
 The `oxmux` crate SHALL own the reusable subscription-aware proxy semantics needed to normalize local AI requests, represent model aliases, expose reasoning/thinking request compatibility primitives, accept app-supplied provider/account availability, route requests through deterministic policy, and return structured outcomes without depending on GPUI, tray/menu libraries, OAuth UI, platform credential storage, provider SDKs, or the `oxidemux` app shell.
 
@@ -223,3 +226,29 @@ Streaming robustness controls in `oxmux` SHALL NOT require GPUI, `oxidemux`, pro
 #### Scenario: App shell consumes but does not redefine stream semantics
 - **WHEN** future `oxidemux` app-shell code displays streaming timeout, cancellation, retry, or error state
 - **THEN** it consumes `oxmux` state rather than creating separate app-owned streaming robustness semantics
+
+### Requirement: Core facade exposes reasoning controls
+The `oxmux` public facade SHALL expose provider-neutral reasoning and thinking control primitives, validation outcomes, compatibility outcomes, and structured errors needed by Rust consumers and tests without importing `oxidemux` or desktop-specific code.
+
+#### Scenario: Rust consumer imports reasoning primitives
+- **WHEN** Rust code imports the public `oxmux` facade after reasoning controls are added
+- **THEN** it can construct and inspect reasoning intent, reasoning source, reasoning effort or budget, compatibility outcome, and unsupported-capability data without importing app-shell, provider SDK, OAuth, or platform credential storage types
+
+#### Scenario: Rust consumer supplies explicit reasoning metadata
+- **WHEN** Rust code imports the public `oxmux` facade after reasoning controls are added
+- **THEN** it can supply explicit typed reasoning metadata through core primitives without requiring HTTP route parsing, provider-shaped JSON parsing, app-shell state, or provider SDK request types
+
+#### Scenario: Core dependency boundary remains intact for reasoning controls
+- **WHEN** maintainers inspect `crates/oxmux/Cargo.toml` and run core dependency-boundary tests after adding reasoning controls
+- **THEN** `oxmux` remains free of GPUI, gpui-component, tray libraries, updater libraries, packaging tools, platform credential storage libraries, provider SDKs, OAuth UI libraries, provider-specific beta header clients, outbound network clients, and the `oxidemux` app crate
+
+### Requirement: Core errors include reasoning failures
+The `oxmux` core SHALL represent invalid reasoning controls and unsupported reasoning capability outcomes as structured `CoreError` data that callers can match without parsing display text.
+
+#### Scenario: Invalid reasoning input is matchable
+- **WHEN** reasoning intent validation fails because a budget, effort, mode, source, or alias convention is invalid
+- **THEN** the returned `CoreError` includes structured reasoning failure data with the affected field and stable failure code
+
+#### Scenario: Unsupported reasoning capability is matchable
+- **WHEN** a selected provider/account/model target cannot honor strict explicit reasoning intent
+- **THEN** the returned `CoreError` includes structured unsupported-capability data that identifies the requested reasoning behavior and the target capability gap

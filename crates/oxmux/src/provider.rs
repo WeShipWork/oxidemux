@@ -8,13 +8,13 @@
 /// Marker for provider authentication ownership in the headless core boundary.
 pub struct ProviderAuthBoundary;
 
-use crate::CoreError;
 use crate::protocol::{CanonicalProtocolRequest, CanonicalProtocolResponse};
 use crate::streaming::{
     CancellationReason, ResponseMode, StreamEvent, StreamFailure, StreamMetadata, StreamingFailure,
     StreamingResponse, StreamingRobustnessPolicy,
 };
 use crate::usage::QuotaState;
+use crate::{CoreError, ReasoningCapability, ReasoningCompatibilityOutcome, ReasoningRequest};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 /// Canonical request addressed to a selected provider and optional account.
@@ -25,6 +25,8 @@ pub struct ProviderExecutionRequest {
     pub account_id: Option<String>,
     /// Canonical protocol request to execute.
     pub request: CanonicalProtocolRequest,
+    /// Reasoning compatibility outcome evaluated for the selected target.
+    pub reasoning_outcome: ReasoningCompatibilityOutcome,
 }
 
 impl ProviderExecutionRequest {
@@ -38,16 +40,69 @@ impl ProviderExecutionRequest {
             provider_id: provider_id.into(),
             account_id,
             request,
+            reasoning_outcome: ReasoningCompatibilityOutcome::Absent,
         };
         request.validate()?;
         Ok(request)
+    }
+
+    /// Creates a provider execution request with target-evaluated reasoning compatibility metadata.
+    pub fn new_with_reasoning_outcome(
+        provider_id: impl Into<String>,
+        account_id: Option<String>,
+        request: CanonicalProtocolRequest,
+        reasoning_outcome: ReasoningCompatibilityOutcome,
+    ) -> Result<Self, CoreError> {
+        let request = Self {
+            provider_id: provider_id.into(),
+            account_id,
+            request,
+            reasoning_outcome,
+        };
+        request.validate()?;
+        Ok(request)
+    }
+
+    /// Attaches target-evaluated reasoning compatibility metadata.
+    pub fn with_reasoning_outcome(
+        mut self,
+        reasoning_outcome: ReasoningCompatibilityOutcome,
+    ) -> Result<Self, CoreError> {
+        self.reasoning_outcome = reasoning_outcome;
+        self.validate()?;
+        Ok(self)
+    }
+
+    /// Returns typed reasoning intent carried by the canonical request.
+    pub fn reasoning(&self) -> &ReasoningRequest {
+        &self.request.reasoning
     }
 
     /// Validates this value and returns a structured core error on failure.
     pub fn validate(&self) -> Result<(), CoreError> {
         validate_required_text("provider_id", &self.provider_id)?;
         validate_optional_text("account_id", self.account_id.as_deref())?;
-        self.request.validate()
+        self.request.validate()?;
+        let has_reasoning_intent = self.request.reasoning.as_intent().is_some();
+        let has_reasoning_outcome = !matches!(
+            self.reasoning_outcome,
+            ReasoningCompatibilityOutcome::Absent
+        );
+        if has_reasoning_intent != has_reasoning_outcome {
+            let message = if has_reasoning_intent {
+                "reasoning_outcome must not be absent when request reasoning intent is present"
+            } else {
+                "reasoning_outcome must be absent when request carries no reasoning intent"
+            };
+            return Err(CoreError::ProviderExecution {
+                provider_id: self.provider_id.clone(),
+                account_id: self.account_id.clone(),
+                failure: ProviderExecutionFailure::InvalidSelection {
+                    message: message.to_string(),
+                },
+            });
+        }
+        Ok(())
     }
 }
 
@@ -104,6 +159,8 @@ pub struct ProviderExecutionMetadata {
     pub provider: ProviderSummary,
     /// Optional account summary associated with this value.
     pub account: Option<AccountSummary>,
+    /// Reasoning compatibility outcome echoed for diagnostics.
+    pub reasoning_outcome: ReasoningCompatibilityOutcome,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -192,6 +249,7 @@ impl MockProviderHarness {
                 supports_streaming: self.outcome.supports_streaming(),
                 auth_method: self.auth_method,
                 routing_eligible: self.routing_eligible,
+                reasoning: ReasoningCapability::Unknown,
             }],
             accounts: account.iter().cloned().collect(),
             degraded_reasons: self.outcome.degraded_reasons(),
@@ -205,10 +263,14 @@ impl MockProviderHarness {
             .map(|account| account.summary(&self.outcome))
     }
 
-    fn metadata(&self) -> ProviderExecutionMetadata {
+    fn metadata(
+        &self,
+        reasoning_outcome: ReasoningCompatibilityOutcome,
+    ) -> ProviderExecutionMetadata {
         ProviderExecutionMetadata {
             provider: self.provider_summary(),
             account: self.account_summary(),
+            reasoning_outcome,
         }
     }
 
@@ -254,17 +316,19 @@ impl ProviderExecutor for MockProviderHarness {
             });
         }
 
+        let reasoning_outcome = request.reasoning_outcome;
+
         match &self.outcome {
             MockProviderOutcome::Success(response) => Ok(ProviderExecutionResult {
                 outcome: ProviderExecutionOutcome::Success(ResponseMode::complete(
                     response.clone(),
                 )),
-                metadata: self.metadata(),
+                metadata: self.metadata(reasoning_outcome.clone()),
             }),
             MockProviderOutcome::SuccessWithMode { response_mode, .. } => {
                 Ok(ProviderExecutionResult {
                     outcome: ProviderExecutionOutcome::Success(response_mode.clone()),
-                    metadata: self.metadata(),
+                    metadata: self.metadata(reasoning_outcome.clone()),
                 })
             }
             MockProviderOutcome::Degraded { response, reasons } => Ok(ProviderExecutionResult {
@@ -272,7 +336,7 @@ impl ProviderExecutor for MockProviderHarness {
                     response_mode: ResponseMode::complete(response.clone()),
                     reasons: reasons.clone(),
                 },
-                metadata: self.metadata(),
+                metadata: self.metadata(reasoning_outcome.clone()),
             }),
             MockProviderOutcome::DegradedWithMode {
                 response_mode,
@@ -283,7 +347,7 @@ impl ProviderExecutor for MockProviderHarness {
                     response_mode: response_mode.clone(),
                     reasons: reasons.clone(),
                 },
-                metadata: self.metadata(),
+                metadata: self.metadata(reasoning_outcome.clone()),
             }),
             MockProviderOutcome::QuotaLimited {
                 response,
@@ -293,7 +357,7 @@ impl ProviderExecutor for MockProviderHarness {
                     response_mode: ResponseMode::complete(response.clone()),
                     quota_state: quota_state.clone(),
                 },
-                metadata: self.metadata(),
+                metadata: self.metadata(reasoning_outcome.clone()),
             }),
             MockProviderOutcome::QuotaLimitedWithMode {
                 response_mode,
@@ -304,16 +368,20 @@ impl ProviderExecutor for MockProviderHarness {
                     response_mode: response_mode.clone(),
                     quota_state: quota_state.clone(),
                 },
-                metadata: self.metadata(),
+                metadata: self.metadata(reasoning_outcome.clone()),
             }),
             MockProviderOutcome::Streaming(response) => Ok(ProviderExecutionResult {
                 outcome: ProviderExecutionOutcome::Success(ResponseMode::Streaming(
                     response.clone(),
                 )),
-                metadata: self.metadata(),
+                metadata: self.metadata(reasoning_outcome.clone()),
             }),
             MockProviderOutcome::StreamingAttempts { policy, attempts } => {
-                execute_mock_streaming_attempts(policy, attempts, self.metadata())
+                execute_mock_streaming_attempts(
+                    policy,
+                    attempts,
+                    self.metadata(reasoning_outcome.clone()),
+                )
             }
             MockProviderOutcome::Failed(failure) => Err(CoreError::ProviderExecution {
                 provider_id: request.provider_id,
@@ -731,6 +799,8 @@ pub struct ProviderCapability {
     pub auth_method: AuthMethodCategory,
     /// Whether routing may select this provider.
     pub routing_eligible: bool,
+    /// Provider-neutral reasoning capability metadata.
+    pub reasoning: ReasoningCapability,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

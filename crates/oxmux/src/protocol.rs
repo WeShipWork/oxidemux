@@ -4,7 +4,7 @@
 //! while current translation functions validate inputs and return deferred
 //! outcomes instead of promising provider-specific conversion behavior.
 
-use crate::{CoreError, ProtocolFamily};
+use crate::{CoreError, ProtocolFamily, ReasoningRequest};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 /// Facade for protocol request and response translation boundaries.
@@ -19,11 +19,15 @@ impl ProtocolBoundary {
         request.validate()?;
         target_protocol.validate()?;
 
-        Ok(ProtocolTranslationOutcome::deferred(
-            ProtocolTranslationDirection::Request,
-            request.protocol.family(),
-            target_protocol.family(),
-        ))
+        let preserved_reasoning_metadata = request.reasoning.as_intent().is_some();
+        Ok(
+            ProtocolTranslationOutcome::deferred_with_reasoning_metadata(
+                ProtocolTranslationDirection::Request,
+                request.protocol.family(),
+                target_protocol.family(),
+                preserved_reasoning_metadata,
+            ),
+        )
     }
 
     /// Validates and translates, or defers translation of, a canonical response.
@@ -86,6 +90,8 @@ pub struct CanonicalProtocolRequest {
     pub model: String,
     /// Opaque protocol payload for this request, response, or stream event.
     pub payload: ProtocolPayload,
+    /// Provider-neutral reasoning metadata supplied separately from opaque payloads.
+    pub reasoning: ReasoningRequest,
 }
 
 impl CanonicalProtocolRequest {
@@ -99,16 +105,25 @@ impl CanonicalProtocolRequest {
             protocol,
             model: model.into(),
             payload,
+            reasoning: ReasoningRequest::absent(),
         };
         request.validate()?;
         Ok(request)
+    }
+
+    /// Attaches normalized provider-neutral reasoning metadata.
+    pub fn with_reasoning(mut self, reasoning: ReasoningRequest) -> Result<Self, CoreError> {
+        self.reasoning = reasoning;
+        self.validate()?;
+        Ok(self)
     }
 
     /// Validates this value and returns a structured core error on failure.
     pub fn validate(&self) -> Result<(), CoreError> {
         self.protocol.validate()?;
         validate_required_text("model", &self.model)?;
-        self.payload.validate()
+        self.payload.validate()?;
+        self.reasoning.validate()
     }
 }
 
@@ -390,11 +405,22 @@ impl<T> ProtocolTranslationOutcome<T> {
         source_family: ProtocolFamily,
         target_family: ProtocolFamily,
     ) -> Self {
+        Self::deferred_with_reasoning_metadata(direction, source_family, target_family, false)
+    }
+
+    /// Creates a deferred protocol translation outcome that records metadata preservation.
+    pub fn deferred_with_reasoning_metadata(
+        direction: ProtocolTranslationDirection,
+        source_family: ProtocolFamily,
+        target_family: ProtocolFamily,
+        preserved_reasoning_metadata: bool,
+    ) -> Self {
         Self::Deferred(DeferredProtocolTranslation {
             direction,
             source_family,
             target_family,
             reason: "protocol translation behavior is intentionally deferred".to_string(),
+            preserved_reasoning_metadata,
         })
     }
 }
@@ -410,6 +436,8 @@ pub struct DeferredProtocolTranslation {
     pub target_family: ProtocolFamily,
     /// Human-readable reason for this state.
     pub reason: String,
+    /// Whether request reasoning metadata was preserved without provider-specific rewrites.
+    pub preserved_reasoning_metadata: bool,
 }
 
 impl DeferredProtocolTranslation {
